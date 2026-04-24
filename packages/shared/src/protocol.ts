@@ -103,7 +103,6 @@ export type RoomStateMessage = {
   roomCode: string;
   levelId: string | null;
   levelIndex: number;
-  level: LevelSchema | null;
   serverTime: number;
   players: Partial<Record<PlayerRole, PlayerSnapshot>>;
   buttons: Record<string, ButtonStateSnapshot>;

@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run src --passWithNoTests"
   },
   "dependencies": {
     "@colyseus/ws-transport": "^0.17.0",
@@ -21,4 +21,3 @@
     "vitest": "^4.0.8"
   }
 }
-

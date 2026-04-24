@@ -48,11 +48,20 @@ type JoinOptions = {
   clientVersion?: string;
 };
 
+type DirectionPulseTicks = {
+  left: number;
+  right: number;
+  up: number;
+  down: number;
+};
+
 type PlayerRecord = PlayerSnapshot & {
-  input: InputMessage | null;
+  inputQueue: InputMessage[];
+  lastInput: InputMessage | null;
   lastInputAt: number;
   interactQueued: boolean;
   jumpQueued: boolean;
+  directionPulseTicks: DirectionPulseTicks;
 };
 
 type ButtonRuntime = {
@@ -84,8 +93,17 @@ const simulationIntervalMs = 1000 / SERVER_TICK_HZ;
 const maxMessagesPerSecond = INPUT_SEND_HZ * 4;
 const levelAdvanceDelayMs = 750;
 const defaultExitHoldMs = 500;
+/**
+ * How many consecutive ticks a direction stays "pressed" after the server
+ * detects a press-edge. Ensures that even a sub-tick physical tap produces a
+ * clearly visible amount of movement on screen.
+ */
+const directionPulseTicks = 4;
 const defaultTimedButtonMs = 5000;
 const defaultInteractPulseMs = 350;
+const maxQueuedInputsPerPlayer = 20;
+const maxInputReorderSeqGap = 12;
+const maxInputReorderMs = 120;
 
 export class CoopRoom extends Room<{ client: CoopClient }> {
   public maxClients = 2;
@@ -181,10 +199,12 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       alive: true,
       respawnAt: 0,
       lastProcessedInputSeq: 0,
-      input: null,
+      inputQueue: [],
+      lastInput: null,
       lastInputAt: 0,
       interactQueued: false,
       jumpQueued: false,
+      directionPulseTicks: { left: 0, right: 0, up: 0, down: 0 },
     });
 
     client.send("room_joined", {
@@ -203,6 +223,17 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     this.restartVotes = {};
     this.updateLevelMechanics(Date.now());
     await this.updateMetadata();
+
+    if (this.currentLevel) {
+      client.send("level_start", {
+        type: "level_start",
+        levelId: this.currentLevel.id,
+        levelIndex: this.currentLevelIndex,
+        level: this.currentLevel,
+        serverTime: Date.now(),
+      });
+    }
+
     this.broadcastRoomState();
   }
 
@@ -217,7 +248,8 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
     for (const remainingPlayer of this.playersBySessionId.values()) {
       remainingPlayer.ready = false;
-      remainingPlayer.input = null;
+      remainingPlayer.inputQueue = [];
+      this.resetDirectionPulses(remainingPlayer);
     }
 
     this.phase = ROOM_PHASES.waiting;
@@ -292,15 +324,22 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       return;
     }
 
-    if (message.seq <= player.lastProcessedInputSeq) {
+    const now = Date.now();
+    const isLateInput = message.seq <= player.lastProcessedInputSeq;
+
+    if (isLateInput && !shouldAcceptLateInput(player, message, now)) {
       return;
     }
 
-    player.input = message;
+    if (player.inputQueue.length < maxQueuedInputsPerPlayer) {
+      player.inputQueue.push(message);
+    } else {
+      player.inputQueue[player.inputQueue.length - 1] = message;
+    }
     player.interactQueued = player.interactQueued || message.interactPressed;
     player.jumpQueued = player.jumpQueued || message.jumpPressed;
-    player.lastProcessedInputSeq = message.seq;
-    player.lastInputAt = Date.now();
+    player.lastProcessedInputSeq = Math.max(player.lastProcessedInputSeq, message.seq);
+    player.lastInputAt = now;
   }
 
   private async handleRestartVote(client: CoopClient, message: RestartVoteMessage): Promise<void> {
@@ -352,8 +391,121 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
         continue;
       }
 
-      this.applyPlatformerInput(player, player.input ?? createNeutralInput(), deltaSeconds);
+      const effectiveInput = this.consumePlayerInputsForTick(player);
+      this.applyPlatformerInput(player, effectiveInput, deltaSeconds);
     }
+  }
+
+  /**
+   * Collapse everything that happened during this tick into a single
+   * effective input:
+   * - Direction / jump flags are OR-merged across all queued messages plus the
+   *   previous held baseline so a very short tap (keydown + keyup landing in
+   *   the same tick) still registers.
+   * - Whenever a direction transitions from released→pressed anywhere in the
+   *   queue (a press edge), the corresponding `directionPulseTicks` counter is
+   *   refreshed to `directionPulseTicks`. While the counter is positive the
+   *   direction stays forced-on, which guarantees every tap produces a visible
+   *   burst of movement even if the physical key release beats the network
+   *   back to the server.
+   * - One-shot pulses (jumpPressed / interactPressed) are OR-merged across the
+   *   queue but NOT added to `lastInput`, so they fire at most once.
+   *
+   * `player.lastInput` is updated to the last received message so the next
+   * empty-queue tick continues applying the current held state.
+   */
+  private consumePlayerInputsForTick(player: PlayerRecord): InputMessage {
+    const baseline = player.lastInput ?? createNeutralInput();
+
+    let mergedLeft = baseline.left;
+    let mergedRight = baseline.right;
+    let mergedUp = baseline.up;
+    let mergedDown = baseline.down;
+    let mergedJump = baseline.jump;
+    let mergedJumpPressed = false;
+    let mergedInteractPressed = false;
+
+    let seq = baseline.seq;
+    let clientTime = baseline.clientTime;
+
+    if (player.inputQueue.length > 0) {
+      // The queue represents everything that happened during this tick. The
+      // effective direction is the OR of the queued inputs only (not the
+      // previous baseline), so a "release" sent mid-tick can actually stop
+      // the player this tick. The baseline is only used to seed edge
+      // detection (`prev*`).
+      mergedLeft = false;
+      mergedRight = false;
+      mergedUp = false;
+      mergedDown = false;
+      mergedJump = false;
+
+      let prevLeft = baseline.left;
+      let prevRight = baseline.right;
+      let prevUp = baseline.up;
+      let prevDown = baseline.down;
+
+      const queuedInputs = [...player.inputQueue].sort((a, b) => a.seq - b.seq);
+
+      for (const input of queuedInputs) {
+        if (input.left && !prevLeft) {
+          player.directionPulseTicks.left = Math.max(player.directionPulseTicks.left, directionPulseTicks);
+        }
+        if (input.right && !prevRight) {
+          player.directionPulseTicks.right = Math.max(player.directionPulseTicks.right, directionPulseTicks);
+        }
+        if (input.up && !prevUp) {
+          player.directionPulseTicks.up = Math.max(player.directionPulseTicks.up, directionPulseTicks);
+        }
+        if (input.down && !prevDown) {
+          player.directionPulseTicks.down = Math.max(player.directionPulseTicks.down, directionPulseTicks);
+        }
+
+        mergedLeft = mergedLeft || input.left;
+        mergedRight = mergedRight || input.right;
+        mergedUp = mergedUp || input.up;
+        mergedDown = mergedDown || input.down;
+        mergedJump = mergedJump || input.jump;
+        mergedJumpPressed = mergedJumpPressed || input.jumpPressed;
+        mergedInteractPressed = mergedInteractPressed || input.interactPressed;
+
+        prevLeft = input.left;
+        prevRight = input.right;
+        prevUp = input.up;
+        prevDown = input.down;
+      }
+
+      const last = queuedInputs[queuedInputs.length - 1]!;
+      seq = last.seq;
+      clientTime = last.clientTime;
+      player.lastInput = last;
+      player.inputQueue = [];
+    }
+
+    if (player.directionPulseTicks.left > 0) player.directionPulseTicks.left -= 1;
+    if (player.directionPulseTicks.right > 0) player.directionPulseTicks.right -= 1;
+    if (player.directionPulseTicks.up > 0) player.directionPulseTicks.up -= 1;
+    if (player.directionPulseTicks.down > 0) player.directionPulseTicks.down -= 1;
+
+    // Sustain direction while the tap pulse is still active, but never force
+    // the direction back on once the player has already returned to rest.
+    const effectiveLeft = mergedLeft || player.directionPulseTicks.left > 0;
+    const effectiveRight = mergedRight || player.directionPulseTicks.right > 0;
+    const effectiveUp = mergedUp || player.directionPulseTicks.up > 0;
+    const effectiveDown = mergedDown || player.directionPulseTicks.down > 0;
+
+    return {
+      type: "input",
+      seq,
+      clientTime,
+      left: effectiveLeft,
+      right: effectiveRight,
+      up: effectiveUp,
+      down: effectiveDown,
+      jump: mergedJump,
+      jumpPressed: mergedJumpPressed,
+      interactPressed: mergedInteractPressed,
+    };
   }
 
   private updateRespawn(player: PlayerRecord, now: number): void {
@@ -369,10 +521,18 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       player.alive = true;
       player.grounded = true;
       player.respawnAt = 0;
-      player.input = null;
+      player.inputQueue = [];
       player.interactQueued = false;
       player.jumpQueued = false;
+      this.resetDirectionPulses(player);
     }
+  }
+
+  private resetDirectionPulses(player: PlayerRecord): void {
+    player.directionPulseTicks.left = 0;
+    player.directionPulseTicks.right = 0;
+    player.directionPulseTicks.up = 0;
+    player.directionPulseTicks.down = 0;
   }
 
   private applyPlatformerInput(player: PlayerRecord, input: InputMessage, deltaSeconds: number): void {
@@ -679,8 +839,10 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     player.vx = 0;
     player.vy = 0;
     player.respawnAt = now + PLAYER_RESPAWN_MS;
-    player.input = null;
+    player.inputQueue = [];
+    player.lastInput = null;
     player.interactQueued = false;
+    this.resetDirectionPulses(player);
     this.exitHoldStartedAt = null;
     this.activeExitId = null;
   }
@@ -823,8 +985,10 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       player.grounded = true;
       player.alive = true;
       player.respawnAt = 0;
-      player.input = null;
+      player.inputQueue = [];
+      player.lastInput = null;
       player.interactQueued = false;
+      this.resetDirectionPulses(player);
     }
   }
 
@@ -1009,7 +1173,6 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       roomCode: this.roomId,
       levelId: this.currentLevel?.id ?? null,
       levelIndex: this.currentLevelIndex,
-      level: this.currentLevel,
       serverTime: Date.now(),
       players,
       buttons: this.buttons,
@@ -1178,6 +1341,26 @@ function isValidInputMessage(message: InputMessage): boolean {
     typeof message.jump === "boolean" &&
     typeof message.jumpPressed === "boolean" &&
     typeof message.interactPressed === "boolean"
+  );
+}
+
+function shouldAcceptLateInput(player: PlayerRecord, message: InputMessage, now: number): boolean {
+  return (
+    !isNeutralInputMessage(message) &&
+    player.lastProcessedInputSeq - message.seq <= maxInputReorderSeqGap &&
+    now - player.lastInputAt <= maxInputReorderMs
+  );
+}
+
+function isNeutralInputMessage(message: InputMessage): boolean {
+  return (
+    !message.left &&
+    !message.right &&
+    !message.up &&
+    !message.down &&
+    !message.jump &&
+    !message.jumpPressed &&
+    !message.interactPressed
   );
 }
 

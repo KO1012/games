@@ -9,6 +9,12 @@
 - 客户端接收服务端状态，用插值和轻量预测改善手感。
 - 所有影响玩法的协议字段需要先写入本文件，再实现。
 
+## 当前实现状态
+
+- 已实现：2 人房间创建/加入、满员拒绝、ready 流转、输入快照、服务端权威移动/碰撞、机关状态、关卡完成、重开投票、`ping`/`pong`。
+- 当前实现使用 `room_state` 消息广播完整房间快照；尚未使用 Colyseus Schema state patch。
+- TODO：断线后 30 秒保留席位与 `reconnectToken` 回到原席位尚未实现。当前断线会按离开房间处理。
+
 ## 技术栈
 
 - 传输与房间：Colyseus WebSocket。
@@ -62,14 +68,14 @@ created
 }
 ```
 
-加入房间参数：
+通过房间码加入时，客户端使用 Colyseus `joinById(roomCode, options)`；`roomCode` 不在 options 内传递。
+
+加入房间 options：
 
 ```json
 {
-  "roomCode": "ABCD",
   "playerName": "Player",
-  "clientVersion": "0.1.0",
-  "reconnectToken": "optional"
+  "clientVersion": "0.1.0"
 }
 ```
 
@@ -156,7 +162,7 @@ created
 
 ## 服务端广播状态
 
-服务端主要通过 Colyseus Schema state patch 广播。状态字段应保持小而稳定。
+当前 MVP 通过 `room_state` 消息广播完整房间快照。后续如果切换到 Colyseus Schema state patch，状态字段仍应保持小而稳定。
 
 ### RoomState
 
@@ -305,6 +311,8 @@ created
 
 ## 重连规则
 
+TODO：以下规则尚未实现，当前断线会触发 `onLeave`，移除玩家并将房间退回 `waiting`。
+
 - 玩家断线后，服务端保留席位 `30s`。
 - 断线玩家状态标记为 `connected = false`。
 - 断线期间角色停止接受输入，可保持原地或进入安全暂停状态。
@@ -350,6 +358,6 @@ created
 - N-05：实现服务端权威 PlayerState 广播。
 - N-06：实现按钮、门、陷阱、移动平台状态广播。
 - N-07：实现关卡完成事件和下一关切换。
-- N-08：实现 30 秒断线重连。
+- N-08：TODO，实现 30 秒断线重连。
 - N-09：实现客户端插值与服务端校正。
 - N-10：完成 VPS 环境下双客户端联机测试。

@@ -23,7 +23,7 @@ describe("shared constants", () => {
     expect(PLAYER_JUMP_SPEED).toBe(760);
     expect(PLAYER_MAX_FALL_SPEED).toBe(980);
     expect(SERVER_TICK_HZ).toBe(60);
-    expect(INPUT_SEND_HZ).toBe(20);
-    expect(STATE_PATCH_HZ).toBe(20);
+    expect(INPUT_SEND_HZ).toBe(60);
+    expect(STATE_PATCH_HZ).toBe(60);
   });
 });

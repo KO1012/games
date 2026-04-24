@@ -24,5 +24,5 @@ export const PLAYER_SPAWNS = {
 } as const;
 
 export const SERVER_TICK_HZ = 60;
-export const INPUT_SEND_HZ = 20;
-export const STATE_PATCH_HZ = 20;
+export const INPUT_SEND_HZ = 60;
+export const STATE_PATCH_HZ = 60;

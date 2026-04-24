@@ -9,7 +9,7 @@
 - 部署目标：自有 VPS
 - 核心玩法：2 人合作机关闯关
 
-当前阶段只允许创建和维护项目文档。没有明确任务时，不要实现游戏功能。
+当前项目已经进入实现阶段。允许在明确任务范围内修改游戏功能、服务端逻辑、客户端表现、测试和部署文档；没有明确任务时，不要新增玩法、关卡或做大范围重构。
 
 ## 回复规则
 
@@ -20,7 +20,7 @@
 
 ## 推荐目录结构
 
-后续进入实现阶段时，优先按下面结构组织：
+实现阶段优先按下面结构组织：
 
 ```text
 /
@@ -71,19 +71,19 @@
 
 ## 运行与开发命令
 
-实现阶段应在根目录提供统一 npm scripts。Codex 添加代码时，需要同步更新本节命令。
+根目录提供统一 pnpm scripts。Codex 添加或修改命令时，需要同步更新本节。
 
-预期命令：
+常用命令：
 
 ```bash
-npm install
-npm run dev            # 同时启动客户端和服务端
-npm run dev:client     # 启动 Vite 客户端
-npm run dev:server     # 启动 Colyseus 服务端
-npm run build          # 构建 client/server/shared
-npm run typecheck      # 全量 TypeScript 类型检查
-npm run lint           # 代码风格检查
-npm run test           # 自动化测试
+corepack pnpm install
+corepack pnpm run dev            # 同时启动客户端和服务端
+corepack pnpm run dev:client     # 启动 Vite 客户端
+corepack pnpm run dev:server     # 启动 Colyseus 服务端
+corepack pnpm run build          # 构建 client/server/shared
+corepack pnpm run typecheck      # 全量 TypeScript 类型检查
+corepack pnpm run lint           # 代码风格检查
+corepack pnpm run test           # 自动化测试
 ```
 
 推荐默认端口：
@@ -104,10 +104,10 @@ npm run test           # 自动化测试
 验收前必须运行：
 
 ```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
+corepack pnpm run typecheck
+corepack pnpm run lint
+corepack pnpm run test
+corepack pnpm run build
 ```
 
 如果某条命令暂时不存在，先说明原因；实现阶段应尽快补齐。
@@ -128,7 +128,7 @@ fix(client): handle reconnect state sync
 
 ## 禁止事项
 
-- 未经要求不要实现游戏功能，尤其是当前文档阶段。
+- 未经明确任务不要新增玩法、关卡、协议字段或大范围重构。
 - 不要把客户端作为权威逻辑来源；移动、碰撞、机关、通关判定都应由服务端决定。
 - 不要引入 P2P、WebRTC 或第三方托管多人服务替代 Colyseus，除非文档先更新并获得确认。
 - 不要硬编码 VPS IP、域名、密钥、数据库密码或 Colyseus secret。

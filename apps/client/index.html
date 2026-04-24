@@ -3,21 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Coop Puzzle Game</title>
+    <meta name="description" content="2-player cooperative puzzle platformer – online co-op with pixel-art style" />
+    <title>Co-op Puzzle · 双人合作解谜</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <main id="app">
       <section class="panel" id="home-panel">
         <div>
-          <p class="eyebrow">2 Player Room</p>
-          <h1>Coop Puzzle MVP</h1>
-          <p class="copy">Create a room or join with a 4-character code.</p>
+          <p class="eyebrow">⬤ 2 PLAYER CO-OP</p>
+          <h1>PUZZLE<br /><span class="accent">RUNNERS</span></h1>
+          <p class="copy">Create a room or enter a 4-char code to join.</p>
         </div>
 
         <div class="actions">
-          <button id="create-room-button" type="button">Create Room</button>
-          <button id="ready-button" type="button" disabled>Ready</button>
-          <button id="restart-button" type="button" disabled>Restart</button>
+          <button id="create-room-button" type="button">CREATE</button>
+          <button id="ready-button" type="button" disabled>READY</button>
+          <button id="restart-button" type="button" disabled>RESTART</button>
           <form id="join-room-form">
             <input
               id="room-code-input"
@@ -26,30 +33,30 @@
               placeholder="CODE"
               spellcheck="false"
             />
-            <button type="submit">Join</button>
+            <button type="submit">JOIN</button>
           </form>
         </div>
       </section>
 
       <section class="hud" id="room-hud">
         <div>
-          <span>Room</span>
+          <span>ROOM</span>
           <strong id="room-code-label">----</strong>
         </div>
         <div>
-          <span>Role</span>
+          <span>ROLE</span>
           <strong id="role-label">-</strong>
         </div>
         <div>
-          <span>Status</span>
+          <span>STATUS</span>
           <strong id="status-label">Not connected</strong>
         </div>
         <div>
-          <span>Level</span>
+          <span>LEVEL</span>
           <strong id="level-label">-</strong>
         </div>
         <div>
-          <span>Ping</span>
+          <span>PING</span>
           <strong id="ping-label">-</strong>
         </div>
       </section>
