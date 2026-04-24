@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "id": "level-006",
+  "name": "Split Route Lift",
+  "world": {
+    "width": 1280,
+    "height": 720,
+    "gravity": 1800,
+    "background": "platformer"
+  },
+  "players": [
+    {
+      "playerIndex": 0,
+      "x": 80,
+      "y": 608,
+      "facing": 1
+    },
+    {
+      "playerIndex": 1,
+      "x": 140,
+      "y": 608,
+      "facing": 1
+    }
+  ],
+  "platforms": [
+    {
+      "id": "wall-left",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "wall-right",
+      "type": "solid",
+      "rect": {
+        "x": 1256,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "floor-main",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 656,
+        "w": 1280,
+        "h": 64
+      }
+    },
+    {
+      "id": "route-a",
+      "type": "oneWay",
+      "rect": {
+        "x": 250,
+        "y": 580,
+        "w": 160,
+        "h": 24
+      }
+    },
+    {
+      "id": "route-b",
+      "type": "oneWay",
+      "rect": {
+        "x": 430,
+        "y": 520,
+        "w": 160,
+        "h": 24
+      }
+    },
+    {
+      "id": "route-c",
+      "type": "oneWay",
+      "rect": {
+        "x": 610,
+        "y": 460,
+        "w": 160,
+        "h": 24
+      }
+    },
+    {
+      "id": "route-d",
+      "type": "oneWay",
+      "rect": {
+        "x": 790,
+        "y": 520,
+        "w": 160,
+        "h": 24
+      }
+    },
+    {
+      "id": "route-e",
+      "type": "oneWay",
+      "rect": {
+        "x": 970,
+        "y": 580,
+        "w": 160,
+        "h": 24
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "id": "button-lower",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 330,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "door-upper",
+          "action": "open"
+        }
+      ]
+    },
+    {
+      "id": "button-upper",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 660,
+        "y": 436,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "door-lower",
+          "action": "open"
+        }
+      ]
+    },
+    {
+      "id": "button-right",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 980,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "door-lower",
+          "action": "open"
+        },
+        {
+          "targetId": "door-upper",
+          "action": "open"
+        }
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "id": "door-lower",
+      "rect": {
+        "x": 560,
+        "y": 400,
+        "w": 40,
+        "h": 256
+      },
+      "startsOpen": false,
+      "openDurationMs": 150,
+      "colorKey": "blue"
+    },
+    {
+      "id": "door-upper",
+      "rect": {
+        "x": 820,
+        "y": 300,
+        "w": 40,
+        "h": 220
+      },
+      "startsOpen": false,
+      "openDurationMs": 150,
+      "colorKey": "red"
+    }
+  ],
+  "traps": [],
+  "exits": [
+    {
+      "id": "exit-a",
+      "rect": {
+        "x": 1160,
+        "y": 560,
+        "w": 72,
+        "h": 96
+      },
+      "requiresBothPlayers": true,
+      "holdMs": 500
+    }
+  ]
+}

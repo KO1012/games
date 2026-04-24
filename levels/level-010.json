@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "id": "level-010",
+  "name": "Final Platform Relay",
+  "world": {
+    "width": 1280,
+    "height": 720,
+    "gravity": 1800,
+    "background": "platformer"
+  },
+  "players": [
+    {
+      "playerIndex": 0,
+      "x": 80,
+      "y": 608,
+      "facing": 1
+    },
+    {
+      "playerIndex": 1,
+      "x": 140,
+      "y": 608,
+      "facing": 1
+    }
+  ],
+  "platforms": [
+    {
+      "id": "wall-left",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "wall-right",
+      "type": "solid",
+      "rect": {
+        "x": 1256,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "floor-start",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 656,
+        "w": 420,
+        "h": 64
+      }
+    },
+    {
+      "id": "floor-finish",
+      "type": "solid",
+      "rect": {
+        "x": 820,
+        "y": 656,
+        "w": 460,
+        "h": 64
+      }
+    },
+    {
+      "id": "final-step-a",
+      "type": "oneWay",
+      "rect": {
+        "x": 280,
+        "y": 560,
+        "w": 120,
+        "h": 24
+      }
+    },
+    {
+      "id": "final-ferry",
+      "type": "moving",
+      "rect": {
+        "x": 470,
+        "y": 560,
+        "w": 120,
+        "h": 24
+      },
+      "path": [
+        {
+          "x": 470,
+          "y": 560
+        },
+        {
+          "x": 700,
+          "y": 520
+        }
+      ],
+      "speed": 90,
+      "activeByDefault": false
+    },
+    {
+      "id": "final-step-b",
+      "type": "oneWay",
+      "rect": {
+        "x": 830,
+        "y": 560,
+        "w": 150,
+        "h": 24
+      }
+    },
+    {
+      "id": "final-step-c",
+      "type": "oneWay",
+      "rect": {
+        "x": 1030,
+        "y": 520,
+        "w": 130,
+        "h": 24
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "id": "button-ferry-left",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 250,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "final-ferry",
+          "action": "start"
+        }
+      ]
+    },
+    {
+      "id": "button-ferry-right",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 850,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "final-ferry",
+          "action": "start"
+        }
+      ]
+    },
+    {
+      "id": "button-door-left",
+      "kind": "interact",
+      "mode": "hold",
+      "rect": {
+        "x": 900,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "door-final",
+          "action": "open"
+        },
+        {
+          "targetId": "laser-final",
+          "action": "disable"
+        }
+      ],
+      "holdMs": 4500,
+      "cooldownMs": 500
+    },
+    {
+      "id": "button-door-right",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 1110,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "door-final",
+          "action": "open"
+        },
+        {
+          "targetId": "laser-final",
+          "action": "disable"
+        }
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "id": "door-final",
+      "rect": {
+        "x": 990,
+        "y": 360,
+        "w": 40,
+        "h": 296
+      },
+      "startsOpen": false,
+      "openDurationMs": 150,
+      "colorKey": "red"
+    }
+  ],
+  "traps": [
+    {
+      "id": "final-pit-spikes",
+      "type": "spike",
+      "rect": {
+        "x": 420,
+        "y": 656,
+        "w": 400,
+        "h": 40
+      },
+      "enabledByDefault": true
+    },
+    {
+      "id": "laser-final",
+      "type": "laser",
+      "rect": {
+        "x": 1070,
+        "y": 440,
+        "w": 24,
+        "h": 216
+      },
+      "enabledByDefault": true,
+      "cycle": {
+        "activeMs": 5000,
+        "inactiveMs": 0,
+        "offsetMs": 0
+      }
+    },
+    {
+      "id": "crusher-final",
+      "type": "crusher",
+      "rect": {
+        "x": 705,
+        "y": 420,
+        "w": 64,
+        "h": 48
+      },
+      "enabledByDefault": true,
+      "path": [
+        {
+          "x": 705,
+          "y": 420
+        },
+        {
+          "x": 705,
+          "y": 560
+        }
+      ],
+      "speed": 90
+    }
+  ],
+  "exits": [
+    {
+      "id": "exit-a",
+      "rect": {
+        "x": 1160,
+        "y": 560,
+        "w": 72,
+        "h": 96
+      },
+      "requiresBothPlayers": true,
+      "holdMs": 500
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coop Puzzle Game</title>
+  </head>
+  <body>
+    <main id="app">
+      <section class="panel" id="home-panel">
+        <div>
+          <p class="eyebrow">2 Player Room</p>
+          <h1>Coop Puzzle MVP</h1>
+          <p class="copy">Create a room or join with a 4-character code.</p>
+        </div>
+
+        <div class="actions">
+          <button id="create-room-button" type="button">Create Room</button>
+          <button id="ready-button" type="button" disabled>Ready</button>
+          <button id="restart-button" type="button" disabled>Restart</button>
+          <form id="join-room-form">
+            <input
+              id="room-code-input"
+              autocomplete="off"
+              maxlength="4"
+              placeholder="CODE"
+              spellcheck="false"
+            />
+            <button type="submit">Join</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="hud" id="room-hud">
+        <div>
+          <span>Room</span>
+          <strong id="room-code-label">----</strong>
+        </div>
+        <div>
+          <span>Role</span>
+          <strong id="role-label">-</strong>
+        </div>
+        <div>
+          <span>Status</span>
+          <strong id="status-label">Not connected</strong>
+        </div>
+        <div>
+          <span>Level</span>
+          <strong id="level-label">-</strong>
+        </div>
+        <div>
+          <span>Ping</span>
+          <strong id="ping-label">-</strong>
+        </div>
+      </section>
+
+      <div id="game"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "id": "level-009",
+  "name": "Laser Rhythm Climb",
+  "world": {
+    "width": 1280,
+    "height": 720,
+    "gravity": 1800,
+    "background": "platformer"
+  },
+  "players": [
+    {
+      "playerIndex": 0,
+      "x": 80,
+      "y": 608,
+      "facing": 1
+    },
+    {
+      "playerIndex": 1,
+      "x": 140,
+      "y": 608,
+      "facing": 1
+    }
+  ],
+  "platforms": [
+    {
+      "id": "wall-left",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "wall-right",
+      "type": "solid",
+      "rect": {
+        "x": 1256,
+        "y": 0,
+        "w": 24,
+        "h": 720
+      }
+    },
+    {
+      "id": "floor-main",
+      "type": "solid",
+      "rect": {
+        "x": 0,
+        "y": 656,
+        "w": 1280,
+        "h": 64
+      }
+    },
+    {
+      "id": "rhythm-a",
+      "type": "oneWay",
+      "rect": {
+        "x": 300,
+        "y": 560,
+        "w": 150,
+        "h": 24
+      }
+    },
+    {
+      "id": "rhythm-b",
+      "type": "oneWay",
+      "rect": {
+        "x": 510,
+        "y": 500,
+        "w": 150,
+        "h": 24
+      }
+    },
+    {
+      "id": "rhythm-c",
+      "type": "oneWay",
+      "rect": {
+        "x": 720,
+        "y": 500,
+        "w": 150,
+        "h": 24
+      }
+    },
+    {
+      "id": "rhythm-d",
+      "type": "oneWay",
+      "rect": {
+        "x": 940,
+        "y": 560,
+        "w": 150,
+        "h": 24
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "id": "button-laser-a-left",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 230,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "laser-a",
+          "action": "disable"
+        }
+      ]
+    },
+    {
+      "id": "button-laser-a-right",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 540,
+        "y": 476,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "laser-a",
+          "action": "disable"
+        }
+      ]
+    },
+    {
+      "id": "button-laser-b-left",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 750,
+        "y": 476,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "laser-b",
+          "action": "disable"
+        }
+      ]
+    },
+    {
+      "id": "button-laser-b-right",
+      "kind": "pressure",
+      "mode": "hold",
+      "rect": {
+        "x": 940,
+        "y": 632,
+        "w": 64,
+        "h": 24
+      },
+      "targets": [
+        {
+          "targetId": "laser-b",
+          "action": "disable"
+        }
+      ]
+    }
+  ],
+  "doors": [],
+  "traps": [
+    {
+      "id": "laser-a",
+      "type": "laser",
+      "rect": {
+        "x": 430,
+        "y": 430,
+        "w": 24,
+        "h": 226
+      },
+      "enabledByDefault": true,
+      "cycle": {
+        "activeMs": 1800,
+        "inactiveMs": 1200,
+        "offsetMs": 0
+      }
+    },
+    {
+      "id": "laser-b",
+      "type": "laser",
+      "rect": {
+        "x": 810,
+        "y": 430,
+        "w": 24,
+        "h": 226
+      },
+      "enabledByDefault": true,
+      "cycle": {
+        "activeMs": 1800,
+        "inactiveMs": 1200,
+        "offsetMs": 700
+      }
+    }
+  ],
+  "exits": [
+    {
+      "id": "exit-a",
+      "rect": {
+        "x": 1160,
+        "y": 560,
+        "w": 72,
+        "h": 96
+      },
+      "requiresBothPlayers": true,
+      "holdMs": 500
+    }
+  ]
+}
