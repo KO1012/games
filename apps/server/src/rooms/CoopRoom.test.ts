@@ -11,6 +11,11 @@ type SentMessage = {
   message: unknown;
 };
 
+type PendingReconnection = {
+  resolve: (client: CoopClient) => void;
+  reject: (error?: unknown) => void;
+};
+
 type TestClient = CoopClient & {
   sent: SentMessage[];
   errors: { code: number; message: string }[];
@@ -23,6 +28,8 @@ type Harness = {
   metadata: Record<string, unknown>;
   getSnapshot: () => RoomStateMessage;
   isLocked: () => boolean;
+  resolveReconnection: (sessionId: string, client: CoopClient) => void;
+  rejectReconnection: (sessionId: string) => void;
   receive: (type: string, client: CoopClient, message: unknown) => Promise<void>;
   step: (deltaMs: number) => void;
 };
@@ -168,6 +175,66 @@ describe("CoopRoom", () => {
     expect(harness.broadcasts.some((message) => message.type === "level_start")).toBe(true);
   });
 
+  it("keeps a dropped player seat during the reconnect window", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+    const secondClient = createClient("session-b");
+
+    await join(harness.room, firstClient, "Alice");
+    await join(harness.room, secondClient, "Bob");
+    await harness.receive("client_ready", firstClient, { type: "client_ready", ready: true });
+    await harness.receive("client_ready", secondClient, { type: "client_ready", ready: true });
+
+    const sentBeforeReconnect = firstClient.sent.length;
+    const dropPromise = harness.room.onDrop(firstClient);
+    await flushPromises();
+
+    const droppedSnapshot = harness.getSnapshot();
+
+    expect(droppedSnapshot.phase).toBe(ROOM_PHASES.playing);
+    expect(droppedSnapshot.players.A?.connected).toBe(false);
+    expect(droppedSnapshot.players.B?.connected).toBe(true);
+    expect(harness.isLocked()).toBe(true);
+
+    harness.resolveReconnection(firstClient.sessionId, firstClient);
+    await dropPromise;
+
+    const reconnectedSnapshot = harness.getSnapshot();
+    const reconnectMessages = firstClient.sent.slice(sentBeforeReconnect).map((message) => message.type);
+
+    expect(reconnectedSnapshot.phase).toBe(ROOM_PHASES.playing);
+    expect(reconnectedSnapshot.players.A?.connected).toBe(true);
+    expect(reconnectMessages).toContain("room_joined");
+    expect(reconnectMessages).toContain("level_start");
+    expect(harness.isLocked()).toBe(true);
+  });
+
+  it("removes a dropped player when the reconnect window expires", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+    const secondClient = createClient("session-b");
+
+    await join(harness.room, firstClient, "Alice");
+    await join(harness.room, secondClient, "Bob");
+    await harness.receive("client_ready", firstClient, { type: "client_ready", ready: true });
+    await harness.receive("client_ready", secondClient, { type: "client_ready", ready: true });
+
+    const dropPromise = harness.room.onDrop(firstClient);
+    await flushPromises();
+
+    expect(harness.getSnapshot().players.A?.connected).toBe(false);
+
+    harness.rejectReconnection(firstClient.sessionId);
+    await dropPromise;
+
+    const snapshot = harness.getSnapshot();
+
+    expect(snapshot.phase).toBe(ROOM_PHASES.waiting);
+    expect(snapshot.players.A).toBeUndefined();
+    expect(snapshot.players.B?.ready).toBe(false);
+    expect(harness.isLocked()).toBe(false);
+  });
+
   it("restarts the current level after both players approve restart_vote", async () => {
     const harness = await createHarness();
     const firstClient = createClient("session-a");
@@ -222,6 +289,40 @@ describe("CoopRoom", () => {
       interactPressed: false,
     });
     harness.step(100);
+
+    const afterInput = harness.getSnapshot().players.A;
+
+    expect(beforeInput).toBeDefined();
+    expect(afterInput).toBeDefined();
+    expect(afterInput?.x).toBeGreaterThan(beforeInput?.x ?? 0);
+    expect(afterInput?.lastProcessedInputSeq).toBe(1);
+  });
+
+  it("falls back to a fixed tick when the simulation delta is near zero", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+    const secondClient = createClient("session-b");
+
+    await join(harness.room, firstClient, "Alice");
+    await join(harness.room, secondClient, "Bob");
+    await harness.receive("client_ready", firstClient, { type: "client_ready", ready: true });
+    await harness.receive("client_ready", secondClient, { type: "client_ready", ready: true });
+
+    const beforeInput = harness.getSnapshot().players.A;
+
+    await harness.receive("input", firstClient, {
+      type: "input",
+      seq: 1,
+      clientTime: Date.now(),
+      left: false,
+      right: true,
+      up: false,
+      down: false,
+      jump: false,
+      jumpPressed: false,
+      interactPressed: false,
+    });
+    harness.step(0.000016);
 
     const afterInput = harness.getSnapshot().players.A;
 
@@ -496,6 +597,7 @@ async function createHarness(): Promise<Harness> {
   const handlers = new Map<string, MessageHandler>();
   const broadcasts: SentMessage[] = [];
   const metadata: Record<string, unknown> = {};
+  const pendingReconnections = new Map<string, PendingReconnection>();
   let locked = false;
   let simulationCallback: ((deltaTime: number) => void) | undefined;
 
@@ -505,6 +607,7 @@ async function createHarness(): Promise<Harness> {
     setMetadata: (nextMetadata: Record<string, unknown>) => Promise<void>;
     lock: () => Promise<void>;
     unlock: () => Promise<void>;
+    allowReconnection: (client: CoopClient, seconds: number | "manual") => Promise<CoopClient>;
     setSimulationInterval: (callback?: (deltaTime: number) => void, delay?: number) => void;
   };
 
@@ -526,6 +629,21 @@ async function createHarness(): Promise<Harness> {
   patchedRoom.unlock = async () => {
     locked = false;
   };
+  patchedRoom.allowReconnection = (client) => {
+    let resolveReconnection!: (reconnectedClient: CoopClient) => void;
+    let rejectReconnection!: (error?: unknown) => void;
+    const promise = new Promise<CoopClient>((resolve, reject) => {
+      resolveReconnection = resolve;
+      rejectReconnection = reject;
+    });
+
+    pendingReconnections.set(client.sessionId, {
+      resolve: resolveReconnection,
+      reject: rejectReconnection,
+    });
+
+    return promise;
+  };
   patchedRoom.setSimulationInterval = (callback) => {
     simulationCallback = callback;
   };
@@ -543,6 +661,20 @@ async function createHarness(): Promise<Harness> {
     metadata,
     getSnapshot: () => (room as unknown as { createRoomState: () => RoomStateMessage }).createRoomState(),
     isLocked: () => locked,
+    resolveReconnection: (sessionId, client) => {
+      const pending = pendingReconnections.get(sessionId);
+
+      expect(pending).toBeDefined();
+      pending?.resolve(client);
+      pendingReconnections.delete(sessionId);
+    },
+    rejectReconnection: (sessionId) => {
+      const pending = pendingReconnections.get(sessionId);
+
+      expect(pending).toBeDefined();
+      pending?.reject(new Error("expired"));
+      pendingReconnections.delete(sessionId);
+    },
     receive: async (type, client, message) => {
       const handler = handlers.get(type);
 
@@ -585,4 +717,9 @@ function createClient(sessionId: string): TestClient {
       left = true;
     },
   } as unknown as TestClient;
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }

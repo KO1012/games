@@ -138,6 +138,13 @@ export type PongMessage = {
   serverTime: number;
 };
 
+export type InputDebugMessage = {
+  type: "input_debug";
+  source: "server";
+  at: number;
+  event: Record<string, unknown>;
+};
+
 export type ServerMessageMap = {
   room_joined: RoomJoinedMessage;
   room_state: RoomStateMessage;
@@ -145,4 +152,5 @@ export type ServerMessageMap = {
   level_complete: LevelCompleteMessage;
   pong: PongMessage;
   room_error: RoomErrorMessage;
+  input_debug: InputDebugMessage;
 };

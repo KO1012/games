@@ -42,6 +42,19 @@ import type { GameState } from "../state.js";
 const PIXEL_FONT = "'Press Start 2P', monospace";
 
 type MechanismView = Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite;
+type RectLike = { x: number; y: number; w: number; h: number };
+
+export type RenderDebugInfo = {
+  cameraScrollX: number;
+  cameraScrollY: number;
+  cameraCenterX: number;
+  cameraCenterY: number;
+  playerViewX: number | null;
+  playerViewY: number | null;
+  playerScreenX: number | null;
+  playerScreenY: number | null;
+  cameraFollowing: boolean;
+};
 
 export class GameScene extends Phaser.Scene {
   // -- Player views --
@@ -56,6 +69,7 @@ export class GameScene extends Phaser.Scene {
   private buttonViews: Record<string, Phaser.GameObjects.Rectangle> = {};
   private doorViews: Record<string, Phaser.GameObjects.Rectangle> = {};
   private doorIndicators: Record<string, Phaser.GameObjects.Rectangle> = {};
+  private doorFeedbackLabels: Record<string, Phaser.GameObjects.Text> = {};
   private trapViews: Record<string, MechanismView> = {};
   private movingPlatformViews: Record<string, Phaser.GameObjects.TileSprite> = {};
   private movingPlatformShadows: Record<string, Phaser.GameObjects.Rectangle> = {};
@@ -70,6 +84,7 @@ export class GameScene extends Phaser.Scene {
   private prevButtons: Record<string, boolean> = {};
   private prevDoors: Record<string, boolean> = {};
   private prevPhase: string = "";
+  private cameraFollowRole: PlayerRole | null = null;
 
   // -- External state ref (set from main.ts) --
   public gameState!: GameState;
@@ -150,6 +165,7 @@ export class GameScene extends Phaser.Scene {
 
     // Sync mechanism views
     this.syncMechanismViews(state);
+    this.syncDoorBlockFeedback(state, time);
 
     // Sync players
     this.syncPlayers(state, time);
@@ -163,6 +179,41 @@ export class GameScene extends Phaser.Scene {
       if (state.phase === ROOM_PHASES.finished) Sound.playGameComplete();
       this.prevPhase = state.phase;
     }
+  }
+
+  public getRenderDebugInfo(role: PlayerRole | null): RenderDebugInfo {
+    const camera = this.cameras?.main;
+
+    if (!camera) {
+      return {
+        cameraScrollX: 0,
+        cameraScrollY: 0,
+        cameraCenterX: 0,
+        cameraCenterY: 0,
+        playerViewX: null,
+        playerViewY: null,
+        playerScreenX: null,
+        playerScreenY: null,
+        cameraFollowing: false,
+      };
+    }
+
+    const view = role ? this.playerViews?.[role] : null;
+    const playerViewX = view?.visible ? view.x : null;
+    const playerViewY = view?.visible ? view.y : null;
+    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })._follow;
+
+    return {
+      cameraScrollX: camera.scrollX,
+      cameraScrollY: camera.scrollY,
+      cameraCenterX: camera.midPoint.x,
+      cameraCenterY: camera.midPoint.y,
+      playerViewX,
+      playerViewY,
+      playerScreenX: playerViewX === null ? null : playerViewX - camera.scrollX,
+      playerScreenY: playerViewY === null ? null : playerViewY - camera.scrollY,
+      cameraFollowing: Boolean(role && view && followTarget === view),
+    };
   }
 
   // ── Players ──────────────────────────────────────────────────
@@ -198,7 +249,7 @@ export class GameScene extends Phaser.Scene {
 
       // Camera follow for local player
       if (role === this.myRole) {
-        this.cameras.main.startFollow(view, true, 0.08, 0.08);
+        this.syncCameraFollow(role, view);
       }
 
       // Death / respawn triggers
@@ -280,6 +331,7 @@ export class GameScene extends Phaser.Scene {
     this.buttonViews = {};
     this.doorViews = {};
     this.doorIndicators = {};
+    this.doorFeedbackLabels = {};
     this.trapViews = {};
     this.movingPlatformViews = {};
     this.movingPlatformShadows = {};
@@ -413,6 +465,19 @@ export class GameScene extends Phaser.Scene {
         .setDepth(6);
       this.doorIndicators[door.id] = indicator;
       this.levelObjects.push(indicator);
+
+      const feedbackLabel = this.add
+        .text(r.x + r.w / 2, r.y - 10, "LOCKED", {
+          fontFamily: PIXEL_FONT,
+          fontSize: "7px",
+          color: "#fca5a5",
+        })
+        .setOrigin(0.5)
+        .setDepth(7)
+        .setVisible(false)
+        .setAlpha(0);
+      this.doorFeedbackLabels[door.id] = feedbackLabel;
+      this.levelObjects.push(feedbackLabel);
     }
 
     // Exits
@@ -502,6 +567,7 @@ export class GameScene extends Phaser.Scene {
       const targetAlpha = isOpen ? 0.12 : 1;
       const current = view.alpha;
       view.setAlpha(current + (targetAlpha - current) * 0.15);
+      view.setStrokeStyle(2, DOOR_FRAME, 1);
 
       // Indicator
       const indicator = this.doorIndicators[id];
@@ -554,5 +620,67 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11)
       .setVisible(false);
+  }
+
+  private syncCameraFollow(role: PlayerRole, view: Phaser.GameObjects.Image): void {
+    const camera = this.cameras.main;
+    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })._follow;
+
+    if (this.cameraFollowRole === role && followTarget === view) {
+      return;
+    }
+
+    camera.startFollow(view, true, 0.08, 0.08);
+    camera.setDeadzone(260, 160);
+    this.cameraFollowRole = role;
+  }
+
+  private syncDoorBlockFeedback(state: GameState, time: number): void {
+    const localPlayer = this.myRole ? state.players[this.myRole] : null;
+
+    if (!state.level || !localPlayer?.alive || !localPlayer.connected) {
+      this.hideDoorBlockFeedback();
+      return;
+    }
+
+    const playerRect = {
+      x: localPlayer.x,
+      y: localPlayer.y,
+      w: PLAYER_SIZE,
+      h: PLAYER_SIZE,
+    };
+
+    for (const door of state.level.doors) {
+      const view = this.doorViews[door.id];
+      const label = this.doorFeedbackLabels[door.id];
+      const isOpen = state.doors[door.id]?.open ?? door.startsOpen;
+      const blocked = !isOpen && this.isPlayerPressingClosedDoor(playerRect, localPlayer.facing, door.rect);
+
+      if (!view || !label) {
+        continue;
+      }
+
+      if (blocked) {
+        const pulse = 0.65 + Math.sin(time * 0.018) * 0.25;
+        label.setVisible(true).setAlpha(pulse);
+        view.setStrokeStyle(4, 0xfca5a5, 0.9);
+      } else {
+        label.setVisible(false).setAlpha(0);
+      }
+    }
+  }
+
+  private hideDoorBlockFeedback(): void {
+    for (const label of Object.values(this.doorFeedbackLabels)) {
+      label.setVisible(false).setAlpha(0);
+    }
+  }
+
+  private isPlayerPressingClosedDoor(playerRect: RectLike, facing: -1 | 1, doorRect: RectLike): boolean {
+    const verticalOverlap = playerRect.y < doorRect.y + doorRect.h && playerRect.y + playerRect.h > doorRect.y;
+    const nearRightSide = facing === 1 && playerRect.x + playerRect.w >= doorRect.x - 8 && playerRect.x + playerRect.w <= doorRect.x + 10;
+    const nearLeftSide = facing === -1 && playerRect.x <= doorRect.x + doorRect.w + 8 && playerRect.x >= doorRect.x + doorRect.w - 10;
+
+    return verticalOverlap && (nearRightSide || nearLeftSide);
   }
 }

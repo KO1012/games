@@ -1,3 +1,5 @@
+import { PLAYER_SIZE } from "./constants.js";
+
 export type Rect = {
   x: number;
   y: number;
@@ -198,6 +200,7 @@ const buttonKinds = new Set<ButtonKind>(["pressure", "interact", "timed"]);
 const buttonModes = new Set<ButtonMode>(["hold"]);
 const targetActions = new Set<TargetActionType>(["open", "close", "toggle", "enable", "disable", "start", "stop"]);
 const trapTypes = new Set<TrapType>(["spike", "laser", "crusher"]);
+const levelIdPattern = /^level-(?:[0-9]{3}|debug-input)$/;
 
 export function validateLevelSchema(input: unknown): LevelValidationResult {
   const errors: string[] = [];
@@ -216,8 +219,8 @@ export function validateLevelSchema(input: unknown): LevelValidationResult {
     errors.push("level.schemaVersion must be 1");
   }
 
-  if (typeof input.id !== "string" || !/^level-[0-9]{3}$/.test(input.id)) {
-    errors.push("level.id must match ^level-[0-9]{3}$");
+  if (typeof input.id !== "string" || !levelIdPattern.test(input.id)) {
+    errors.push("level.id must match ^level-(?:[0-9]{3}|debug-input)$");
   }
 
   if (typeof input.name !== "string" || input.name.length < 1 || input.name.length > 64) {
@@ -243,6 +246,7 @@ export function validateLevelSchema(input: unknown): LevelValidationResult {
   const exits = validateArray(input.exits, "level.exits", errors)
     .map((item, index) => validateExit(item, `level.exits[${index}]`, errors))
     .filter(isDefined);
+  const isDebugInputLevel = input.id === "level-debug-input";
 
   if (players.length !== 2) {
     errors.push("level.players must contain exactly 2 spawns");
@@ -258,7 +262,7 @@ export function validateLevelSchema(input: unknown): LevelValidationResult {
     errors.push("level.exits must contain at least 1 exit");
   }
 
-  if (!exits.some((exit) => exit.requiresBothPlayers)) {
+  if (!isDebugInputLevel && !exits.some((exit) => exit.requiresBothPlayers)) {
     errors.push("level.exits must contain at least one requiresBothPlayers exit");
   }
 
@@ -736,7 +740,7 @@ function validateRectsInsideWorld<T extends { id: string; rect: Rect }>(
 
 function validateSpawnsInsideWorld(players: PlayerSpawn[], world: LevelWorld, errors: string[]): void {
   for (const player of players) {
-    if (player.x < 0 || player.x > world.width || player.y < 0 || player.y > world.height) {
+    if (player.x < 0 || player.x + PLAYER_SIZE > world.width || player.y < 0 || player.y + PLAYER_SIZE > world.height) {
       errors.push(`player spawn ${player.playerIndex} must be inside world bounds`);
     }
   }
@@ -756,7 +760,14 @@ function validateSpawnSafety(
   ];
 
   for (const player of players) {
-    if (blockingRects.some((rect) => pointInsideRect(player, rect))) {
+    const spawnRect = {
+      x: player.x,
+      y: player.y,
+      w: PLAYER_SIZE,
+      h: PLAYER_SIZE,
+    };
+
+    if (blockingRects.some((rect) => rectsOverlap(spawnRect, rect))) {
       errors.push(`player spawn ${player.playerIndex} overlaps a blocking object`);
     }
   }
@@ -827,10 +838,6 @@ function checkUnknownKeys(input: Record<string, unknown>, keys: readonly string[
 
 function isRectInsideWorld(rect: Rect, world: LevelWorld): boolean {
   return rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= world.width && rect.y + rect.h <= world.height;
-}
-
-function pointInsideRect(point: Point, rect: Rect): boolean {
-  return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {

@@ -11,9 +11,9 @@
 
 ## 当前实现状态
 
-- 已实现：2 人房间创建/加入、满员拒绝、ready 流转、输入快照、服务端权威移动/碰撞、机关状态、关卡完成、重开投票、`ping`/`pong`。
+- 已实现：2 人房间创建/加入、满员拒绝、ready 流转、输入快照、服务端权威移动/碰撞、机关状态、关卡完成、重开投票、30 秒断线重连、`ping`/`pong`。
 - 当前实现使用 `room_state` 消息广播完整房间快照；尚未使用 Colyseus Schema state patch。
-- TODO：断线后 30 秒保留席位与 `reconnectToken` 回到原席位尚未实现。当前断线会按离开房间处理。
+- 断线后服务端保留席位 30 秒；客户端使用 Colyseus `reconnectionToken` 回到原席位。
 
 ## 技术栈
 
@@ -299,6 +299,28 @@ created
 }
 ```
 
+### `input_debug`
+
+仅在服务端 `INPUT_DEBUG=1` 时广播，用于方向键问题定位，不参与玩法逻辑。
+
+```json
+{
+  "type": "input_debug",
+  "source": "server",
+  "at": 18333421,
+  "event": {
+    "kind": "physics-x",
+    "role": "A",
+    "seq": 1204,
+    "axisX": 1,
+    "previousX": 160,
+    "attemptedX": 164.33,
+    "finalX": 164.33,
+    "blocked": false,
+    "collisionId": null
+  }
+}
+
 ## 错误码
 
 - `ROOM_FULL`：房间已满。
@@ -311,13 +333,12 @@ created
 
 ## 重连规则
 
-TODO：以下规则尚未实现，当前断线会触发 `onLeave`，移除玩家并将房间退回 `waiting`。
-
 - 玩家断线后，服务端保留席位 `30s`。
 - 断线玩家状态标记为 `connected = false`。
-- 断线期间角色停止接受输入，可保持原地或进入安全暂停状态。
-- 玩家使用 `reconnectToken` 回到原席位。
-- 超过 `30s` 未重连，房间进入等待退出状态；MVP 可直接解散房间。
+- 断线期间角色停止接受输入并停在当前位置。
+- 客户端保存 `room.reconnectionToken`，异常断开或刷新页面后使用 `client.reconnect(token)` 回到原席位。
+- 玩家回连后，服务端重新发送 `room_joined` 与当前 `level_start`。
+- 超过 `30s` 未重连，服务端移除席位，将剩余玩家 ready 置回 `false`，房间退回 `waiting`。
 
 ## 客户端表现策略
 
@@ -358,6 +379,6 @@ TODO：以下规则尚未实现，当前断线会触发 `onLeave`，移除玩家
 - N-05：实现服务端权威 PlayerState 广播。
 - N-06：实现按钮、门、陷阱、移动平台状态广播。
 - N-07：实现关卡完成事件和下一关切换。
-- N-08：TODO，实现 30 秒断线重连。
+- N-08：实现 30 秒断线重连。
 - N-09：实现客户端插值与服务端校正。
 - N-10：完成 VPS 环境下双客户端联机测试。

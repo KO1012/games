@@ -19,6 +19,7 @@ import {
   type ButtonStateSnapshot,
   type ClientReadyMessage,
   type DoorStateSnapshot,
+  type InputDebugMessage,
   type InputMessage,
   type LevelSchema,
   type MovingPlatformStateSnapshot,
@@ -62,6 +63,7 @@ type PlayerRecord = PlayerSnapshot & {
   lastInput: InputMessage | null;
   lastInputAt: number;
   interactQueued: boolean;
+  interactQueuedUntil: number;
   jumpQueued: boolean;
   directionPulseTicks: DirectionPulseTicks;
   horizontalIntent: AxisIntent;
@@ -105,9 +107,28 @@ const defaultExitHoldMs = 500;
 const directionPulseTicks = 4;
 const defaultTimedButtonMs = 5000;
 const defaultInteractPulseMs = 350;
+const interactInputBufferMs = 120;
 const maxQueuedInputsPerPlayer = 20;
 const maxInputReorderSeqGap = 12;
 const maxInputReorderMs = 120;
+const reconnectWindowSeconds = 30;
+const debugInputEnabled = process.env.INPUT_DEBUG === "1";
+
+function createServerInputDebugMessage(event: Record<string, unknown>): InputDebugMessage | null {
+  if (!debugInputEnabled) return null;
+
+  const message: InputDebugMessage = {
+    type: "input_debug",
+    source: "server",
+    at: Date.now(),
+    event,
+  };
+
+  // Keep this compact and grep-friendly.
+  console.log("[server-input]", JSON.stringify({ at: message.at, ...event }));
+
+  return message;
+}
 
 export class CoopRoom extends Room<{ client: CoopClient }> {
   public maxClients = 2;
@@ -207,6 +228,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       lastInput: null,
       lastInputAt: 0,
       interactQueued: false,
+      interactQueuedUntil: 0,
       jumpQueued: false,
       directionPulseTicks: {
         left: 0,
@@ -248,12 +270,86 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     this.broadcastRoomState();
   }
 
-  public async onLeave(client: CoopClient): Promise<void> {
+  public async onDrop(client: CoopClient): Promise<void> {
     const player = this.playersBySessionId.get(client.sessionId);
+
+    if (!player) {
+      return;
+    }
+
+    await this.handleDroppedPlayer(client, player);
+  }
+
+  public async onLeave(client: CoopClient): Promise<void> {
+    if (!this.playersBySessionId.has(client.sessionId)) {
+      return;
+    }
+
+    await this.removePlayer(client.sessionId);
+  }
+
+  private async handleDroppedPlayer(client: CoopClient, player: PlayerRecord): Promise<void> {
+    player.connected = false;
+    player.vx = 0;
+    player.vy = 0;
+    delete this.restartVotes[player.role];
+
+    if (this.phase !== ROOM_PHASES.playing && this.phase !== ROOM_PHASES.levelComplete && this.phase !== ROOM_PHASES.finished) {
+      player.ready = false;
+      this.phase = ROOM_PHASES.waiting;
+    }
+
+    this.resetPlayerInputState(player);
+    this.exitHoldStartedAt = null;
+    this.activeExitId = null;
+    this.updateLevelMechanics(Date.now());
+    await this.updateMetadata();
+    this.broadcastRoomState();
+
+    try {
+      const reconnectedClient = (await this.allowReconnection(client, reconnectWindowSeconds)) as CoopClient;
+      const currentPlayer = this.playersBySessionId.get(client.sessionId);
+
+      if (!currentPlayer) {
+        return;
+      }
+
+      currentPlayer.connected = true;
+
+      if (this.playersBySessionId.size === this.maxClients && this.phase === ROOM_PHASES.waiting) {
+        this.phase = ROOM_PHASES.readyCheck;
+      }
+
+      reconnectedClient.send("room_joined", {
+        roomCode: this.roomId,
+        role: currentPlayer.role,
+        playerIndex: currentPlayer.playerIndex,
+      });
+
+      if (this.currentLevel) {
+        reconnectedClient.send("level_start", {
+          type: "level_start",
+          levelId: this.currentLevel.id,
+          levelIndex: this.currentLevelIndex,
+          level: this.currentLevel,
+          serverTime: Date.now(),
+        });
+      }
+
+      this.updateLevelMechanics(Date.now());
+      await this.updateMetadata();
+      this.broadcastRoomState();
+    } catch {
+      await this.removePlayer(client.sessionId);
+    }
+  }
+
+  private async removePlayer(sessionId: string): Promise<void> {
+    const player = this.playersBySessionId.get(sessionId);
 
     if (player) {
       this.sessionIdByRole.delete(player.role);
-      this.playersBySessionId.delete(client.sessionId);
+      this.playersBySessionId.delete(sessionId);
       delete this.restartVotes[player.role];
     }
 
@@ -309,7 +405,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   private async handleClientReady(client: CoopClient, message: ClientReadyMessage): Promise<void> {
     const player = this.playersBySessionId.get(client.sessionId);
 
-    if (!player || !isValidReadyMessage(message)) {
+    if (!player || !player.connected || !isValidReadyMessage(message)) {
       return;
     }
 
@@ -330,7 +426,37 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   private handleInput(client: CoopClient, message: InputMessage): void {
     const player = this.playersBySessionId.get(client.sessionId);
 
-    if (!player || !this.canProcessPlayerInput() || !isValidInputMessage(message)) {
+    if (!player || !player.connected) {
+      this.debugInput({
+        kind: "reject",
+        reason: player ? "disconnected-player" : "no-player",
+        sessionId: client.sessionId,
+        message,
+      });
+      return;
+    }
+
+    if (!this.canProcessPlayerInput()) {
+      this.debugInput({
+        kind: "reject",
+        reason: "cannot-process-input",
+        phase: this.phase,
+        sessionId: client.sessionId,
+        role: player.role,
+        seq: message?.seq,
+        message,
+      });
+      return;
+    }
+
+    if (!isValidInputMessage(message)) {
+      this.debugInput({
+        kind: "reject",
+        reason: "invalid-input",
+        sessionId: client.sessionId,
+        role: player.role,
+        message,
+      });
       return;
     }
 
@@ -338,6 +464,14 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     const isLateInput = message.seq <= player.lastProcessedInputSeq;
 
     if (isLateInput && !shouldAcceptLateInput(player, message, now)) {
+      this.debugInput({
+        kind: "reject",
+        reason: "late-input",
+        role: player.role,
+        seq: message.seq,
+        lastProcessedInputSeq: player.lastProcessedInputSeq,
+        input: compactInput(message),
+      });
       return;
     }
 
@@ -346,16 +480,29 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     } else {
       player.inputQueue[player.inputQueue.length - 1] = message;
     }
-    player.interactQueued = player.interactQueued || message.interactPressed;
+    if (message.interactPressed) {
+      player.interactQueued = true;
+      player.interactQueuedUntil = now + interactInputBufferMs;
+    }
+
     player.jumpQueued = player.jumpQueued || message.jumpPressed;
     player.lastProcessedInputSeq = Math.max(player.lastProcessedInputSeq, message.seq);
     player.lastInputAt = now;
+
+    this.debugInput({
+      kind: "enqueue",
+      role: player.role,
+      seq: message.seq,
+      queueLength: player.inputQueue.length,
+      lastProcessedInputSeq: player.lastProcessedInputSeq,
+      input: compactInput(message),
+    });
   }
 
   private async handleRestartVote(client: CoopClient, message: RestartVoteMessage): Promise<void> {
     const player = this.playersBySessionId.get(client.sessionId);
 
-    if (!player || !isValidRestartVoteMessage(message)) {
+    if (!player || !player.connected || !isValidRestartVoteMessage(message)) {
       return;
     }
 
@@ -374,7 +521,10 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   }
 
   private allPlayersReady(): boolean {
-    return this.playersBySessionId.size === this.maxClients && Array.from(this.playersBySessionId.values()).every((player) => player.ready);
+    return (
+      this.playersBySessionId.size === this.maxClients &&
+      Array.from(this.playersBySessionId.values()).every((player) => player.connected && player.ready)
+    );
   }
 
   private async startPlaying(): Promise<void> {
@@ -390,6 +540,12 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
   private applyQueuedPlayerInputs(deltaSeconds: number, now: number): void {
     for (const player of this.playersBySessionId.values()) {
+      if (!player.connected) {
+        player.vx = 0;
+        player.vy = 0;
+        continue;
+      }
+
       if (!player.alive) {
         this.updateRespawn(player, now);
         continue;
@@ -410,12 +566,21 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     return this.phase === ROOM_PHASES.playing || this.isWarmupActive();
   }
 
+  private debugInput(event: Record<string, unknown>): void {
+    const message = createServerInputDebugMessage(event);
+
+    if (!message) return;
+
+    this.broadcast("input_debug", message);
+  }
+
   private isWarmupActive(): boolean {
     return this.phase === ROOM_PHASES.waiting && this.playersBySessionId.size === 1;
   }
 
   private consumePlayerInputsForTick(player: PlayerRecord): InputMessage {
     const baseline = player.lastInput ?? createNeutralInput();
+    const queueConsumed = player.inputQueue.length > 0;
 
     let heldLeft = baseline.left;
     let heldRight = baseline.right;
@@ -550,7 +715,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     if (player.directionPulseTicks.up > 0) player.directionPulseTicks.up -= 1;
     if (player.directionPulseTicks.down > 0) player.directionPulseTicks.down -= 1;
 
-    return {
+    const effectiveInput: InputMessage = {
       type: "input",
       seq,
       clientTime,
@@ -562,6 +727,19 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       jumpPressed,
       interactPressed,
     };
+
+    this.debugInput({
+      kind: "consume",
+      role: player.role,
+      queueConsumed,
+      seq: effectiveInput.seq,
+      input: compactInput(effectiveInput),
+      horizontalIntent: player.horizontalIntent,
+      verticalIntent: player.verticalIntent,
+      pulses: { ...player.directionPulseTicks },
+    });
+
+    return effectiveInput;
   }
 
   private updateRespawn(player: PlayerRecord, now: number): void {
@@ -585,6 +763,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     player.inputQueue = [];
     player.lastInput = null;
     player.interactQueued = false;
+    player.interactQueuedUntil = 0;
     player.jumpQueued = false;
     player.horizontalIntent = 0;
     player.verticalIntent = 0;
@@ -619,12 +798,31 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       player.facing = axisX > 0 ? 1 : -1;
     }
 
-    player.x = clamp(player.x + player.vx * deltaSeconds, 0, worldWidth - PLAYER_SIZE);
+    const attemptedX = clamp(player.x + player.vx * deltaSeconds, 0, worldWidth - PLAYER_SIZE);
+    player.x = attemptedX;
 
-    if (this.playerCollidesHorizontally(player)) {
+    const horizontalCollision = this.findHorizontalCollision(player);
+
+    if (horizontalCollision) {
       player.x = previousX;
       player.vx = 0;
     }
+
+    this.debugInput({
+      kind: "physics-x",
+      role: player.role,
+      seq: input.seq,
+      axisX,
+      input: compactInput(input),
+      deltaSeconds,
+      previousX,
+      attemptedX,
+      finalX: player.x,
+      vx: player.vx,
+      blocked: Boolean(horizontalCollision),
+      collisionId: horizontalCollision?.id ?? null,
+      collisionOneWay: horizontalCollision?.oneWay ?? null,
+    });
 
     player.y = clamp(player.y + player.vy * deltaSeconds, 0, worldHeight - PLAYER_SIZE);
     player.grounded = false;
@@ -725,7 +923,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       .filter((actor) => rectsOverlap(actor.rect, button.rect))
       .map((actor) => actor.id);
     const pressed = pressedBy.length > 0;
-    const interactPressed = this.consumeInteractForButton(button, pressedBy);
+    const interactPressed = this.consumeInteractForButton(button, pressedBy, now);
     let active = false;
 
     if (button.kind === "pressure") {
@@ -770,12 +968,18 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     return created;
   }
 
-  private consumeInteractForButton(button: ButtonDefinition, pressedBy: string[]): boolean {
+  private consumeInteractForButton(button: ButtonDefinition, pressedBy: string[], now: number): boolean {
     let consumed = false;
 
     for (const player of this.playersBySessionId.values()) {
+      if (player.interactQueued && now > player.interactQueuedUntil) {
+        player.interactQueued = false;
+        player.interactQueuedUntil = 0;
+      }
+
       if (player.interactQueued && pressedBy.includes(player.role) && rectsOverlap(this.getPlayerRect(player), button.rect)) {
         player.interactQueued = false;
+        player.interactQueuedUntil = 0;
         consumed = true;
       }
     }
@@ -915,7 +1119,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     }
 
     const playerRects = Array.from(this.playersBySessionId.values())
-      .filter((player) => player.alive)
+      .filter((player) => player.connected && player.alive)
       .map((player) => this.getPlayerRect(player));
 
     for (const exit of this.currentLevel.exits) {
@@ -1060,9 +1264,19 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   }
 
   private playerCollidesHorizontally(player: PlayerRecord): boolean {
+    return this.findHorizontalCollision(player) !== null;
+  }
+
+  private findHorizontalCollision(player: PlayerRecord): (CollisionRect & { id?: string }) | null {
     const playerRect = this.getPlayerRect(player);
 
-    return this.getSolidCollisionRects().some(({ rect }) => rectsOverlap(playerRect, rect));
+    for (const collision of this.getSolidCollisionRectsWithIds()) {
+      if (rectsOverlap(playerRect, collision.rect)) {
+        return collision;
+      }
+    }
+
+    return null;
   }
 
   private resolveVerticalCollisions(player: PlayerRecord, previousY: number, wantsDropThrough: boolean): void {
@@ -1104,7 +1318,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     }
   }
 
-  private getSolidCollisionRects(): CollisionRect[] {
+  private getSolidCollisionRectsWithIds(): Array<CollisionRect & { id?: string }> {
     if (!this.currentLevel) {
       return [];
     }
@@ -1113,16 +1327,22 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       ...this.currentLevel.platforms
         .filter((platform) => platform.type === "solid" || platform.type === "moving")
         .map((platform) => ({
+          id: platform.id,
           rect: this.getPlatformRect(platform),
           oneWay: false,
         })),
       ...this.currentLevel.doors
         .filter((door) => !this.doors[door.id]?.open)
         .map((door) => ({
+          id: door.id,
           rect: door.rect,
           oneWay: false,
         })),
     ];
+  }
+
+  private getSolidCollisionRects(): CollisionRect[] {
+    return this.getSolidCollisionRectsWithIds().map(({ rect, oneWay }) => ({ rect, oneWay }));
   }
 
   private getOneWayCollisionRects(): CollisionRect[] {
@@ -1168,7 +1388,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
   private getAlivePlayerActors(): ActorRect[] {
     return Array.from(this.playersBySessionId.values())
-      .filter((player) => player.alive)
+      .filter((player) => player.connected && player.alive)
       .map((player) => ({
         id: player.role,
         rect: this.getPlayerRect(player),
@@ -1421,6 +1641,19 @@ function isNeutralInputMessage(message: InputMessage): boolean {
   );
 }
 
+function compactInput(input: InputMessage): Record<string, unknown> {
+  return {
+    seq: input.seq,
+    left: input.left,
+    right: input.right,
+    up: input.up,
+    down: input.down,
+    jump: input.jump,
+    jumpPressed: input.jumpPressed,
+    interactPressed: input.interactPressed,
+  };
+}
+
 function createNeutralInput(): InputMessage {
   return {
     type: "input",
@@ -1441,5 +1674,15 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function normalizeDeltaMs(deltaTime: number): number {
-  return deltaTime > 1 ? deltaTime : deltaTime * 1000;
+  if (!Number.isFinite(deltaTime) || deltaTime <= 0) {
+    return simulationIntervalMs;
+  }
+
+  if (deltaTime >= 1) {
+    return deltaTime;
+  }
+
+  const secondsAsMs = deltaTime * 1000;
+
+  return secondsAsMs >= 1 ? secondsAsMs : simulationIntervalMs;
 }

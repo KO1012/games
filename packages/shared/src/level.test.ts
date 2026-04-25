@@ -33,6 +33,14 @@ describe("level schema", () => {
     }
   });
 
+  it("validates the debug input level JSON file", async () => {
+    const fileName = "level-debug-input.json";
+    const rawLevel = JSON.parse(await readFile(new URL(fileName, levelsDirectory), "utf8")) as unknown;
+    const level = parseLevelSchema(rawLevel, fileName);
+
+    expect(level.id).toBe("level-debug-input");
+  });
+
   it("rejects invalid button targets", () => {
     const invalidLevel: LevelSchema = {
       ...createTestLevel(),
@@ -51,6 +59,25 @@ describe("level schema", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("button button-a targets unknown object missing-door");
+  });
+
+  it("rejects spawns whose full player rectangle overlaps blocking objects", () => {
+    const invalidLevel: LevelSchema = {
+      ...createTestLevel(),
+      platforms: [
+        ...createTestLevel().platforms,
+        {
+          id: "spawn-overlap",
+          type: "solid",
+          rect: { x: 80, y: 40, w: 24, h: 24 },
+        },
+      ],
+    };
+
+    const result = validateLevelSchema(invalidLevel);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("player spawn 0 overlaps a blocking object");
   });
 });
 

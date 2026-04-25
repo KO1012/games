@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "level-debug-input",
+  "name": "Input Debug Open Field",
+  "world": {
+    "width": 1280,
+    "height": 720,
+    "gravity": 1800,
+    "background": "platformer"
+  },
+  "players": [
+    { "playerIndex": 0, "x": 160, "y": 608, "facing": 1 },
+    { "playerIndex": 1, "x": 260, "y": 608, "facing": 1 }
+  ],
+  "platforms": [
+    { "id": "wall-left", "type": "solid", "rect": { "x": 0, "y": 0, "w": 24, "h": 720 } },
+    { "id": "wall-right", "type": "solid", "rect": { "x": 1256, "y": 0, "w": 24, "h": 720 } },
+    { "id": "floor-main", "type": "solid", "rect": { "x": 0, "y": 656, "w": 1280, "h": 64 } }
+  ],
+  "buttons": [],
+  "doors": [],
+  "traps": [],
+  "exits": [
+    { "id": "exit-debug", "rect": { "x": 1160, "y": 560, "w": 72, "h": 96 }, "requiresBothPlayers": false, "holdMs": 500 }
+  ]
+}

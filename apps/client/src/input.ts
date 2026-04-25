@@ -107,14 +107,22 @@ export class KeyboardInputBuffer {
   }
 
   public snapshot(sceneInput: DirectionInput | null = null): DirectionInput {
+    return this.createSnapshot(sceneInput, true);
+  }
+
+  public peekSnapshot(sceneInput: DirectionInput | null = null): DirectionInput {
+    return this.createSnapshot(sceneInput, false);
+  }
+
+  private createSnapshot(sceneInput: DirectionInput | null, consumePressedKeys: boolean): DirectionInput {
     const bufferedInput: DirectionInput = {
       left: this.heldKeys.has("KeyA") || this.heldKeys.has("ArrowLeft"),
       right: this.heldKeys.has("KeyD") || this.heldKeys.has("ArrowRight"),
       up: this.heldKeys.has("KeyW") || this.heldKeys.has("ArrowUp"),
       down: this.heldKeys.has("KeyS") || this.heldKeys.has("ArrowDown"),
       jump: this.heldKeys.has("Space"),
-      jumpPressed: this.consumePressedKey("Space"),
-      interactPressed: this.consumePressedKey("KeyE"),
+      jumpPressed: consumePressedKeys ? this.consumePressedKey("Space") : this.pressedKeys.has("Space"),
+      interactPressed: consumePressedKeys ? this.consumePressedKey("KeyE") : this.pressedKeys.has("KeyE"),
     };
 
     if (!sceneInput) {

@@ -24,7 +24,7 @@ levels/
   level-010.json
 ```
 
-`id` 必须与文件名主体一致，例如 `level-001.json` 内的 `id` 为 `level-001`。
+`id` 必须与文件名主体一致，例如 `level-001.json` 内的 `id` 为 `level-001`。常规关卡使用 `level-[0-9]{3}`；输入链路调试专用关卡允许 `level-debug-input`，且仅在 `DEBUG_LEVEL=1` 时加载到第一位。
 
 ## 顶层结构
 
@@ -70,7 +70,7 @@ levels/
     },
     "id": {
       "type": "string",
-      "pattern": "^level-[0-9]{3}$"
+      "pattern": "^level-(?:[0-9]{3}|debug-input)$"
     },
     "name": {
       "type": "string",
@@ -404,7 +404,7 @@ JSON Schema 只能检查结构，加载器还必须检查：
 - `trap.type = laser` 使用周期时必须提供 `cycle`。
 - 所有矩形必须在 `world.width` 和 `world.height` 范围内。
 - 出生点不能与 solid 平台、关闭门或陷阱重叠。
-- 至少有一个出口 `requiresBothPlayers = true`。
+- 常规关卡至少有一个出口 `requiresBothPlayers = true`；`level-debug-input` 调试关卡允许单人出口。
 
 ## 最小关卡示例
 

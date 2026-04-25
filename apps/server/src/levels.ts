@@ -5,10 +5,12 @@ import { fileURLToPath } from "node:url";
 import { parseLevelSchema, type LevelSchema } from "@coop-game/shared";
 
 const levelFilePattern = /^level-[0-9]{3}\.json$/;
+const debugLevelFileName = "level-debug-input.json";
 
 export async function loadLevelSet(): Promise<LevelSchema[]> {
   const levelsDirectory = await findLevelsDirectory();
   const levelFiles = (await readdir(levelsDirectory)).filter((fileName) => levelFilePattern.test(fileName)).sort();
+  const filesToLoad = process.env.DEBUG_LEVEL === "1" ? [debugLevelFileName, ...levelFiles] : levelFiles;
 
   if (levelFiles.length === 0) {
     throw new Error(`No level JSON files found in ${levelsDirectory}`);
@@ -16,7 +18,7 @@ export async function loadLevelSet(): Promise<LevelSchema[]> {
 
   const levels: LevelSchema[] = [];
 
-  for (const fileName of levelFiles) {
+  for (const fileName of filesToLoad) {
     const filePath = path.join(levelsDirectory, fileName);
     const rawLevel = JSON.parse(await readFile(filePath, "utf8")) as unknown;
     const level = parseLevelSchema(rawLevel, filePath);

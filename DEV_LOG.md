@@ -1,6 +1,6 @@
 # DEV_LOG.md
 
-本文件记录 AI 对项目文件的改动。以后每次 AI 修改项目文件，都必须追加记录。
+本文件记录 AI 对项目文件的改动。记录按时间从旧到新排序；以后每次 AI 修改项目文件，都必须在文件末尾追加记录，不要插入到文件顶部或历史记录中间。
 
 记录格式：
 
@@ -13,106 +13,6 @@
 - 验证：
 - 风险：
 ```
-
-## 2026-04-25 01:57:00 +08:00
-
-- 任务：进一步修复"经常性按下去没反应"的残留体验问题：上一版修复后单次极短按虽然已经能产生约 4.3 px 的位移，但在摄像头跟随角色的情况下基本不可见，玩家仍然感知为"没反应"。
-- 根因：单次 tap 只产生 1 个 server tick 的位移，约占 48 px 角色宽度的 9%，叠加摄像头跟随和 16.67 ms 的 broadcast 间隔后视觉上难以识别。
-- 改动：
-  - **服务端按键脉冲（press pulse）**：新增 `directionPulseTicks = 3` 常量以及 `PlayerRecord.directionPulseTicks` 计数器字段。`consumePlayerInputsForTick` 重写：
-    - 在逐条处理队列时做"方向 false→true"的边沿检测，命中即把对应方向的 pulse 计数刷新到 3。
-    - 计算本 tick 有效方向 = (本 tick 内任一 input 的该方向为 true) OR (pulse > 0)。
-    - tick 末对所有 pulse 计数 `-1`（下限为 0）。
-    - 结论：任何一次 press（包括子 tick 内的 keydown + keyup）都至少产生 3 个 tick × `PLAYER_SPEED / SERVER_TICK_HZ` ≈ **13 px** 的连续位移，大约角色宽度的 27%，肉眼明显。长按 / 松手 / 换方向的语义保持不变（长按时 baseline 一直为 true，不会重复触发 pulse；松手后 baseline 为 false 且 pulse 自然衰减到 0）。
-  - **合并基线修正**：队列非空时，merged direction 从 `false` 起算，只 OR 队列内的 input，不再把 baseline 的 held 状态强行 OR 进来。这确保"已经松手"的 input 能在同一 tick 让角色停下。
-  - **状态重置同步**：`onLeave` / `updateRespawn` / `killPlayer` / `respawnPlayers` 都通过新增的 `resetDirectionPulses(player)` 清空 pulse 计数，避免跨关/复活后残留。
-  - **测试补齐**：
-    - 替换原 tap 用例为 `sustains a press-pulse so a sub-tick tap still produces a visible burst`：断言 tick1/tick2/tick3 依次位移，tick4 停下。
-    - 新增 `stops the player immediately when a held direction is released mid-tick`：断言 release 后下一个空 tick 不再移动（防止 pulse 逻辑意外延长长按。）
-- 文件：
-  - `apps/server/src/rooms/CoopRoom.ts`
-  - `apps/server/src/rooms/CoopRoom.test.ts`
-  - `DEV_LOG.md`
-- 验证：
-  - `corepack pnpm run typecheck`：通过。
-  - `corepack pnpm run lint`：通过。
-  - `corepack pnpm run test`：全部通过（shared 6 / client 9 / server 10，新增的 2 条回归测试通过，其余测试未回退）。
-  - `corepack pnpm run build`：通过。
-- 风险：
-  - "按住右 + 瞬间敲左"这类对向 tap 场景，本 tick 两个方向都被视为按下（axisX = 0），并且 pulse 会让 left 再维持 3 个 tick → 约 50 ms 的停顿。属于罕见对向输入边角，对正常合作解谜体验无影响。
-  - 未做双浏览器联机回归实测，需要使用方亲自验证轻敲 / 长按 / 松手的体感。
-
-## 2026-04-25 01:20:00 +08:00
-
-- 任务：修复方向键短按无效、长按不稳定的手感问题（用户反馈：必须长按一会才动，轻敲完全没反应）。
-- 根因：服务端 `applyQueuedPlayerInputs` 按 `deltaSeconds / queue.length` 给队列里每条 input 分配 dt。网络抖动下 `keydown + keyup` 常常落在同一个 tick 的队列里（长度=2），每条输入只拿到 ~8ms 的 dt，按下方向的那条只能产生 `260 × 0.008 ≈ 2px` 的位移且紧跟着被 `keyup` 的 `vx = 0` 覆盖，肉眼几乎不可见；下一 tick 回退到 `lastInput = keyup`，角色完全不动。
-- 改动：
-  - **服务端输入合并**：把 `applyQueuedPlayerInputs` 的内循环改为调用新增的 `consumePlayerInputsForTick(player)`。该方法按 tick 将队列里的所有 input 做按位 OR 合并（direction / jump / jumpPressed / interactPressed 全都只要有一条为 true 就视为本 tick 被按下），然后用完整的 `deltaSeconds` 应用一次 `applyPlatformerInput`。`player.lastInput` 仍取队列最后一条，作为下一 tick 的 held 基线。
-  - 效果：
-    - 轻敲方向键 → 本 tick 合并结果含该方向 → 完整一 tick 位移（约 4.3px），下一 tick 回退到 release → 停下。
-    - 长按 → 每 tick 只有一条 input，合并结果与原值一致 → 连续移动。
-    - 松手 → `lastInput` 变 release，下一 tick 停下。
-    - 换方向 → 合并结果含新方向，facing 立刻翻转（沿用既有逻辑）。
-  - **新增回归测试**：`apps/server/src/rooms/CoopRoom.test.ts` 增加 `moves a player even when keydown and keyup land in the same tick (tap)`，断言同一 tick 内 press+release 依然能移动，并且下一空 tick 会停在原位。
-- 文件：
-  - `apps/server/src/rooms/CoopRoom.ts`
-  - `apps/server/src/rooms/CoopRoom.test.ts`
-  - `DEV_LOG.md`
-- 验证：
-  - `corepack pnpm run typecheck`：通过。
-  - `corepack pnpm run lint`：通过。
-  - `corepack pnpm run test`：全部通过（shared 6 / client 7 / server 9，新增的 tap 测试通过）。
-  - `corepack pnpm run build`：通过。
-- 风险：
-  - 合并逻辑在"按住右 + 快速敲左"这种对向混合输入场景下，这一 tick 会被认为 left、right 同时按下（axisX = 0），角色静止一帧。属于罕见对向输入场景，视觉影响不大。
-  - 未做双浏览器联机实测，理论上无破坏性改动。
-
-## 2026-04-25 00:42:00 +08:00
-
-- 任务：彻底解决按键经常没反应以及操作延迟特别慢的 P0 体验问题。
-- 改动：
-  - **输入防丢队列（修复经常没反应）**：重构服务端 `CoopRoom` 中的玩家输入存储逻辑。将 `player.input` 替换为 `inputQueue` 数组。在模拟帧更新时，将积累的所有输入包按等比时长（`deltaSeconds / queue.length`）全部执行一次 `applyPlatformerInput`。这确保了玩家极其短暂的点按（例如在帧间触发的快速按下与松开）都能被精准消费并产生位移，不再被帧末状态覆盖吞噬。
-  - **移除冗余状态广播（修复操作特别慢）**：分析发现原 `RoomStateMessage` 协议在每一次状态广播（原定 20Hz）时，都包含了高达数 KB 的静态关卡全量数据（`level`）。这造成了严重的 WebSocket 带宽拥塞以及前端反序列化的性能损耗。我们在 `protocol.ts` 和 `CoopRoom.ts` 中去除了 `RoomStateMessage` 的 `level` 字段，改为在首次连接或关卡切换时通过 `level_start` 消息下发。
-  - **提高物理与同步帧率**：在消除了网络阻塞瓶颈后，将 `INPUT_SEND_HZ` 与 `STATE_PATCH_HZ` 双双从 20Hz 提升至 60Hz，彻底清除了因更新间隔导致的基础通讯延迟。
-  - **补充测试**：更新并修复了常量与相关的测试用例，确保网络类型的兼容。
-- 文件：
-  - `packages/shared/src/protocol.ts`
-  - `packages/shared/src/constants.ts`
-  - `packages/shared/src/index.test.ts`
-  - `apps/client/src/state.ts`
-  - `apps/client/src/main.ts`
-  - `apps/server/src/rooms/CoopRoom.ts`
-  - `DEV_LOG.md`
-- 验证：
-  - `corepack pnpm run typecheck`：全部通过。
-  - `corepack pnpm run lint`：全部通过。
-  - `corepack pnpm run test`：所有测试通过（包含了更新常量的单测修复）。
-- 风险：
-  - 提升同步帧率至 60Hz 后，服务端 CPU 消耗会有所增加。如果承载上百个房间，可能需要适当降为 30Hz，但目前双人独立部署绰绰有余。
-
-## 2026-04-25 00:15:00 +08:00
-
-- 任务：修复游戏按键经常按了没反应的持续性问题。
-- 改动：
-  - 根因分析：Phaser 的 `keyboard.createCursorKeys()` 和 `keyboard.addKey()` 会在 capture 阶段拦截方向键、Space 等事件的 `preventDefault()`，导致 window 级的 `keydown` 事件无法到达 `KeyboardInputBuffer`。加上 Phaser `JustDown()` 在 `setInterval` 中调用不可靠，双输入系统产生了系统性冲突。
-  - 彻底移除 Phaser 键盘系统：
-    - GameScene 不再创建 cursors、wasd、jumpKey、interactKey。
-    - GameScene 删除 `readInput()` 和 `readDirectionInput` 字段。
-    - GameScene `create()` 中显式 `this.input.keyboard.enabled = false`。
-    - Phaser 引擎配置新增 `input: { keyboard: false }`，从 plugin 层面彻底禁用。
-  - `main.ts` 中 `readCurrentInput()` 不再调用 scene input，直接使用 `keyboardInput.snapshot(null)`。
-  - 输入链路统一为：window keydown/keyup → KeyboardInputBuffer.heldKeys → snapshot → send 到服务端。
-- 文件：
-  - `apps/client/src/scenes/GameScene.ts`
-  - `apps/client/src/main.ts`
-  - `DEV_LOG.md`
-- 验证：
-  - `corepack pnpm run typecheck`：通过。
-  - `corepack pnpm run lint`：通过。
-  - `corepack pnpm run test`：通过（shared 6, client 5, server 6）。
-- 风险：
-  - Phaser keyboard 完全禁用后，如果后续需要 Phaser 级别的键盘功能（如 debug overlay），需要重新评估。
-  - 未做双浏览器联机回归验证。
 
 ## 2026-04-24 18:40:38 +08:00
 
@@ -214,7 +114,6 @@
   - 未做双浏览器人工联机回归。
   - 客户端仍没有实际测试文件。
 
-
 ## 2026-04-24 22:41:06 +08:00
 
 - 任务：修复进房后 Ready/Restart 按钮无法点击的问题。
@@ -226,7 +125,6 @@
   - `corepack pnpm run lint`：通过。
 - 风险：
   - 未重新运行完整 typecheck/test/build；本次仅修改 CSS。
-
 
 ## 2026-04-24 22:45:44 +08:00
 
@@ -240,7 +138,6 @@
   - `corepack pnpm run lint`：通过。
 - 风险：
   - 未重新运行完整 test/build；本次为客户端输入修复。
-
 
 ## 2026-04-24 22:49:25 +08:00
 
@@ -260,7 +157,6 @@
   - `corepack pnpm --filter @coop-game/server test`：通过，1 个测试文件、6 个测试。
 - 风险：
   - 未重新运行完整 build；本次为开发服输入修复。
-
 
 ## 2026-04-24 22:52:53 +08:00
 
@@ -297,6 +193,22 @@
   - `http://127.0.0.1:5173` 和 `http://127.0.0.1:2567`：本地开发服均返回 200。
 - 风险：
   - 未做双浏览器人工联机通关验证；本次主要通过输入逻辑单测和构建检查验证。
+
+## 2026-04-24 23:24:30 +08:00
+
+- 任务：修复游戏开始后方向键偶发不移动或很久才移动一次的 P0 BUG。
+- 改动：
+  - 根因：`KeyboardInputBuffer.handleKeyUp` 未清理 `pressedKeys`，导致跳跃/交互键的脉冲状态残留，污染后续输入快照。
+  - 修复：`handleKeyUp` 中添加 `this.pressedKeys.delete(code)`，确保按键抬起时脉冲状态同步清理。
+  - 回归测试：新增 `clears pressed state on keyup to avoid stale action flags` 测试。
+- 文件：
+  - `apps/client/src/input.ts`
+  - `apps/client/src/input.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm --filter @coop-game/client test`：通过，1 个测试文件、5 个测试。
+- 风险：
+  - 未做双浏览器人工联机验证；单测已覆盖回归场景。
 
 ## 2026-04-24 23:34:00 +08:00
 
@@ -343,22 +255,6 @@
   - 像素字体从 Google Fonts CDN 加载，离线/断网环境会回退到 monospace。
   - 音效需要用户首次点击按钮后才能播放（Web Audio 安全策略）。
 
-## 2026-04-24 23:24:30 +08:00
-
-- 任务：修复游戏开始后方向键偶发不移动或很久才移动一次的 P0 BUG。
-- 改动：
-  - 根因：`KeyboardInputBuffer.handleKeyUp` 未清理 `pressedKeys`，导致跳跃/交互键的脉冲状态残留，污染后续输入快照。
-  - 修复：`handleKeyUp` 中添加 `this.pressedKeys.delete(code)`，确保按键抬起时脉冲状态同步清理。
-  - 回归测试：新增 `clears pressed state on keyup to avoid stale action flags` 测试。
-- 文件：
-  - `apps/client/src/input.ts`
-  - `apps/client/src/input.test.ts`
-  - `DEV_LOG.md`
-- 验证：
-  - `corepack pnpm --filter @coop-game/client test`：通过，1 个测试文件、5 个测试。
-- 风险：
-  - 未做双浏览器人工联机验证；单测已覆盖回归场景。
-
 ## 2026-04-24 23:55:00 +08:00
 
 - 任务：全面升级游戏视觉体验（光影、视差、毛玻璃 UI）。
@@ -404,6 +300,53 @@
   - 未做双浏览器完整联机通关回归。
   - 本机 PowerShell 启动异常，本次验证命令通过 Node 子进程执行。
 
+## 2026-04-25 00:15:00 +08:00
+
+- 任务：修复游戏按键经常按了没反应的持续性问题。
+- 改动：
+  - 根因分析：Phaser 的 `keyboard.createCursorKeys()` 和 `keyboard.addKey()` 会在 capture 阶段拦截方向键、Space 等事件的 `preventDefault()`，导致 window 级的 `keydown` 事件无法到达 `KeyboardInputBuffer`。加上 Phaser `JustDown()` 在 `setInterval` 中调用不可靠，双输入系统产生了系统性冲突。
+  - 彻底移除 Phaser 键盘系统：
+    - GameScene 不再创建 cursors、wasd、jumpKey、interactKey。
+    - GameScene 删除 `readInput()` 和 `readDirectionInput` 字段。
+    - GameScene `create()` 中显式 `this.input.keyboard.enabled = false`。
+    - Phaser 引擎配置新增 `input: { keyboard: false }`，从 plugin 层面彻底禁用。
+  - `main.ts` 中 `readCurrentInput()` 不再调用 scene input，直接使用 `keyboardInput.snapshot(null)`。
+  - 输入链路统一为：window keydown/keyup → KeyboardInputBuffer.heldKeys → snapshot → send 到服务端。
+- 文件：
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/main.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过（shared 6, client 5, server 6）。
+- 风险：
+  - Phaser keyboard 完全禁用后，如果后续需要 Phaser 级别的键盘功能（如 debug overlay），需要重新评估。
+  - 未做双浏览器联机回归验证。
+
+## 2026-04-25 00:42:00 +08:00
+
+- 任务：彻底解决按键经常没反应以及操作延迟特别慢的 P0 体验问题。
+- 改动：
+  - **输入防丢队列（修复经常没反应）**：重构服务端 `CoopRoom` 中的玩家输入存储逻辑。将 `player.input` 替换为 `inputQueue` 数组。在模拟帧更新时，将积累的所有输入包按等比时长（`deltaSeconds / queue.length`）全部执行一次 `applyPlatformerInput`。这确保了玩家极其短暂的点按（例如在帧间触发的快速按下与松开）都能被精准消费并产生位移，不再被帧末状态覆盖吞噬。
+  - **移除冗余状态广播（修复操作特别慢）**：分析发现原 `RoomStateMessage` 协议在每一次状态广播（原定 20Hz）时，都包含了高达数 KB 的静态关卡全量数据（`level`）。这造成了严重的 WebSocket 带宽拥塞以及前端反序列化的性能损耗。我们在 `protocol.ts` 和 `CoopRoom.ts` 中去除了 `RoomStateMessage` 的 `level` 字段，改为在首次连接或关卡切换时通过 `level_start` 消息下发。
+  - **提高物理与同步帧率**：在消除了网络阻塞瓶颈后，将 `INPUT_SEND_HZ` 与 `STATE_PATCH_HZ` 双双从 20Hz 提升至 60Hz，彻底清除了因更新间隔导致的基础通讯延迟。
+  - **补充测试**：更新并修复了常量与相关的测试用例，确保网络类型的兼容。
+- 文件：
+  - `packages/shared/src/protocol.ts`
+  - `packages/shared/src/constants.ts`
+  - `packages/shared/src/index.test.ts`
+  - `apps/client/src/state.ts`
+  - `apps/client/src/main.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：全部通过。
+  - `corepack pnpm run lint`：全部通过。
+  - `corepack pnpm run test`：所有测试通过（包含了更新常量的单测修复）。
+- 风险：
+  - 提升同步帧率至 60Hz 后，服务端 CPU 消耗会有所增加。如果承载上百个房间，可能需要适当降为 30Hz，但目前双人独立部署绰绰有余。
+
 ## 2026-04-25 01:02:02 +08:00
 
 - 任务：继续修复方向键只有一开始第一下有反应、后续无响应的问题。
@@ -430,6 +373,59 @@
 - 风险：
   - 浏览器自动化无法真实保持方向键长按；长按持续移动通过服务端测试和 SDK 联调验证。
   - 本机 PowerShell 启动异常，本次验证命令通过 Node 子进程执行。
+
+## 2026-04-25 01:20:00 +08:00
+
+- 任务：修复方向键短按无效、长按不稳定的手感问题（用户反馈：必须长按一会才动，轻敲完全没反应）。
+- 根因：服务端 `applyQueuedPlayerInputs` 按 `deltaSeconds / queue.length` 给队列里每条 input 分配 dt。网络抖动下 `keydown + keyup` 常常落在同一个 tick 的队列里（长度=2），每条输入只拿到 ~8ms 的 dt，按下方向的那条只能产生 `260 × 0.008 ≈ 2px` 的位移且紧跟着被 `keyup` 的 `vx = 0` 覆盖，肉眼几乎不可见；下一 tick 回退到 `lastInput = keyup`，角色完全不动。
+- 改动：
+  - **服务端输入合并**：把 `applyQueuedPlayerInputs` 的内循环改为调用新增的 `consumePlayerInputsForTick(player)`。该方法按 tick 将队列里的所有 input 做按位 OR 合并（direction / jump / jumpPressed / interactPressed 全都只要有一条为 true 就视为本 tick 被按下），然后用完整的 `deltaSeconds` 应用一次 `applyPlatformerInput`。`player.lastInput` 仍取队列最后一条，作为下一 tick 的 held 基线。
+  - 效果：
+    - 轻敲方向键 → 本 tick 合并结果含该方向 → 完整一 tick 位移（约 4.3px），下一 tick 回退到 release → 停下。
+    - 长按 → 每 tick 只有一条 input，合并结果与原值一致 → 连续移动。
+    - 松手 → `lastInput` 变 release，下一 tick 停下。
+    - 换方向 → 合并结果含新方向，facing 立刻翻转（沿用既有逻辑）。
+  - **新增回归测试**：`apps/server/src/rooms/CoopRoom.test.ts` 增加 `moves a player even when keydown and keyup land in the same tick (tap)`，断言同一 tick 内 press+release 依然能移动，并且下一空 tick 会停在原位。
+- 文件：
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：全部通过（shared 6 / client 7 / server 9，新增的 tap 测试通过）。
+  - `corepack pnpm run build`：通过。
+- 风险：
+  - 合并逻辑在"按住右 + 快速敲左"这种对向混合输入场景下，这一 tick 会被认为 left、right 同时按下（axisX = 0），角色静止一帧。属于罕见对向输入场景，视觉影响不大。
+  - 未做双浏览器联机实测，理论上无破坏性改动。
+
+## 2026-04-25 01:57:00 +08:00
+
+- 任务：进一步修复"经常性按下去没反应"的残留体验问题：上一版修复后单次极短按虽然已经能产生约 4.3 px 的位移，但在摄像头跟随角色的情况下基本不可见，玩家仍然感知为"没反应"。
+- 根因：单次 tap 只产生 1 个 server tick 的位移，约占 48 px 角色宽度的 9%，叠加摄像头跟随和 16.67 ms 的 broadcast 间隔后视觉上难以识别。
+- 改动：
+  - **服务端按键脉冲（press pulse）**：新增 `directionPulseTicks = 3` 常量以及 `PlayerRecord.directionPulseTicks` 计数器字段。`consumePlayerInputsForTick` 重写：
+    - 在逐条处理队列时做"方向 false→true"的边沿检测，命中即把对应方向的 pulse 计数刷新到 3。
+    - 计算本 tick 有效方向 = (本 tick 内任一 input 的该方向为 true) OR (pulse > 0)。
+    - tick 末对所有 pulse 计数 `-1`（下限为 0）。
+    - 结论：任何一次 press（包括子 tick 内的 keydown + keyup）都至少产生 3 个 tick × `PLAYER_SPEED / SERVER_TICK_HZ` ≈ **13 px** 的连续位移，大约角色宽度的 27%，肉眼明显。长按 / 松手 / 换方向的语义保持不变（长按时 baseline 一直为 true，不会重复触发 pulse；松手后 baseline 为 false 且 pulse 自然衰减到 0）。
+  - **合并基线修正**：队列非空时，merged direction 从 `false` 起算，只 OR 队列内的 input，不再把 baseline 的 held 状态强行 OR 进来。这确保"已经松手"的 input 能在同一 tick 让角色停下。
+  - **状态重置同步**：`onLeave` / `updateRespawn` / `killPlayer` / `respawnPlayers` 都通过新增的 `resetDirectionPulses(player)` 清空 pulse 计数，避免跨关/复活后残留。
+  - **测试补齐**：
+    - 替换原 tap 用例为 `sustains a press-pulse so a sub-tick tap still produces a visible burst`：断言 tick1/tick2/tick3 依次位移，tick4 停下。
+    - 新增 `stops the player immediately when a held direction is released mid-tick`：断言 release 后下一个空 tick 不再移动（防止 pulse 逻辑意外延长长按。）
+- 文件：
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：全部通过（shared 6 / client 9 / server 10，新增的 2 条回归测试通过，其余测试未回退）。
+  - `corepack pnpm run build`：通过。
+- 风险：
+  - "按住右 + 瞬间敲左"这类对向 tap 场景，本 tick 两个方向都被视为按下（axisX = 0），并且 pulse 会让 left 再维持 3 个 tick → 约 50 ms 的停顿。属于罕见对向输入边角，对正常合作解谜体验无影响。
+  - 未做双浏览器联机回归实测，需要使用方亲自验证轻敲 / 长按 / 松手的体感。
 
 ## 2026-04-25 02:20:07 +08:00
 
@@ -536,3 +532,135 @@
   - 运行态乱序验证：先发 `seq=2` 释放，再发迟到 `seq=1` 右按下，角色从 `x=80` 短暂移动到 `x=111.98` 后停住，`lastProcessedInputSeq=2`。
 - 风险：
   - 仍未拿到用户现场的具体按键序列；如果问题来自浏览器实际 keydown/keyup 丢失或焦点，需继续抓客户端发包日志定位。
+
+## 2026-04-25 18:02:59 +08:00
+
+- 任务：为 P0 方向键失灵问题加入可开关 INPUT DEBUG TRACE，定位浏览器事件、客户端发送、服务端收包/consume、水平物理碰撞四段链路，并补充 debug open field 验证。
+- 改动：
+  - 客户端新增 `?debugInput=1` 开关，记录 keydown/keyup、clear-buffer、send/send-skip，并暴露 `window.__COOP_INPUT_DEBUG__`。
+  - 服务端新增 `INPUT_DEBUG=1` 日志，记录 input reject/enqueue、consume effectiveInput、physics-x 位移和水平碰撞 id。
+  - 新增 `levels/level-debug-input.json`，并在 `DEBUG_LEVEL=1` 时让该关卡排在第一位；常规加载仍只使用数字关卡。
+  - 扩展 level schema，允许 `level-debug-input` 作为调试关卡 id，并允许该调试关卡使用单人出口。
+  - 补充服务器输入测试：open field 右键 60 tick 持续移动、关闭门碰撞报告 `door-a` 且可反向离开、左右方向不会同时输出。
+- 文件：
+  - `apps/client/src/main.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/levels.ts`
+  - `apps/server/src/rooms/CoopRoom.input.test.ts`
+  - `packages/shared/src/level.ts`
+  - `packages/shared/src/level.test.ts`
+  - `levels/level-debug-input.json`
+  - `LEVEL_SCHEMA.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过，shared 7 tests、client 9 tests、server 23 tests。
+  - `corepack pnpm run build`：通过；Vite 仍提示现有 chunk 大小超过 500 kB。
+- 风险：未进行双浏览器手工联调复现；需要按 `INPUT_DEBUG=1 DEBUG_LEVEL=1 pnpm dev` 和 `http://localhost:5173/?debugInput=1` 在浏览器 console/server console 观察完整链路。
+
+## 2026-04-25 18:20:23 +08:00
+
+- 任务：按用户要求把输入 debug 信息显示到游戏画面内，减少依赖服务端终端日志。
+- 改动：
+  - 新增服务端 `input_debug` 调试广播消息，仅 `INPUT_DEBUG=1` 时发送，不参与玩法逻辑。
+  - 客户端 `?debugInput=1` 时新增右下角 `INPUT DEBUG` 浮层，显示 room/role/phase、当前输入快照、本地 key/send/send-skip、服务端 enqueue/consume/physics-x/reject、玩家 x/vx/seq。
+  - 为 `KeyboardInputBuffer` 增加只读 `peekSnapshot()`，debug trace/浮层读取输入时不消费 `jumpPressed`/`interactPressed`。
+  - `NETWORK_SPEC.md` 补充 `input_debug` 调试事件。
+- 文件：
+  - `apps/client/src/main.ts`
+  - `apps/client/src/input.ts`
+  - `apps/client/src/styles.css`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `packages/shared/src/protocol.ts`
+  - `NETWORK_SPEC.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过，shared 7 tests、client 9 tests、server 23 tests。
+  - `corepack pnpm run build`：通过；Vite 仍提示现有 chunk 大小超过 500 kB。
+- 风险：未在浏览器内手工长按方向键确认浮层实时刷新；当前 5174/2568 debug dev watch 进程应会自动热更新。
+
+## 2026-04-25 18:31:31 +08:00
+
+- 任务：在输入 debug 浮层中补充相机与渲染屏幕坐标，用于判断“世界坐标移动但视觉上不动”是否由相机跟随造成。
+- 改动：
+  - `GameScene` 新增 `getRenderDebugInfo()`，返回相机 `scrollX/scrollY`、中心点、本地玩家 view 坐标、屏幕坐标和 follow 状态。
+  - `INPUT DEBUG` 浮层新增 `camera` 与 `render` 两行，显示 `scroll/center/follow/view/screen`。
+- 文件：
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/main.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过，shared 7 tests、client 9 tests、server 23 tests。
+  - `corepack pnpm run build`：通过；Vite 仍提示现有 chunk 大小超过 500 kB。
+- 风险：未在浏览器内截图确认新增字段展示；当前 dev server 应通过 Vite 热更新加载客户端改动。
+
+## 2026-04-25 18:37:35 +08:00
+
+- 任务：根据画面 debug 结果修复服务端物理位移为 0 的问题。
+- 改动：
+  - `physics-x` debug 事件补充 `deltaSeconds` 字段。
+  - 修正 `normalizeDeltaMs`：当 Colyseus/计时器传入异常小的 delta 时，回退到固定 60Hz tick 时长，避免 `axisX=1`、`vx=260` 但 `attemptedX/finalX` 不变化。
+  - 增加回归测试，模拟接近 0 的 simulation delta，确认玩家仍会按固定 tick 移动。
+- 文件：
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过，shared 7 tests、client 9 tests、server 24 tests。
+  - `corepack pnpm run build`：通过；Vite 仍提示现有 chunk 大小超过 500 kB。
+- 风险：需要刷新当前 debug 页面后重新长按右键确认 `deltaSeconds` 约为 `0.0167` 且 `finalX` 持续增加。
+
+## 2026-04-25 19:11:21 +08:00
+
+- 任务：修复审查指出的 ready 卡住、交互输入长期缓存、出生点安全校验问题，并补齐 30 秒断线重连、关闭门反馈和相机跟随体验。
+- 改动：
+  - 客户端根据服务端 `ready=false` 同步清除本地 `readySent`，队友离开后可再次点击 READY。
+  - 服务端交互输入增加 120ms 过期窗口，未在按钮范围内消费的 `interactPressed` 不再无限期保留。
+  - 共享关卡校验改为按 `PLAYER_SIZE` 检查完整出生矩形是否越界或重叠阻挡物。
+  - 服务端使用 Colyseus `onDrop` 保留断线席位 30 秒，回连后重发 `room_joined` / `level_start`，过期后移除席位并重置剩余玩家 ready。
+  - 客户端保存 `reconnectionToken` 到 `sessionStorage`，异常断开或刷新后优先回连原房间，并在重连中暂停输入。
+  - 客户端关闭门附近显示 `LOCKED` 反馈并高亮门框；相机跟随增加 deadzone，减少本地角色视觉静止感。
+  - 更新 `NETWORK_SPEC.md`、`ROADMAP.md`、`README.md` 中断线重连状态说明。
+- 文件：
+  - `apps/client/src/main.ts`
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `apps/server/src/rooms/CoopRoom.input.test.ts`
+  - `packages/shared/src/level.ts`
+  - `packages/shared/src/level.test.ts`
+  - `NETWORK_SPEC.md`
+  - `ROADMAP.md`
+  - `README.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 8 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 27 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+- 风险：
+  - 未做真实双浏览器断网/刷新回连手测；当前由服务端重连单测、客户端类型检查和构建覆盖。
+  - 门反馈只做本地可视提示，不改变服务端碰撞判定。
+
+## 2026-04-25 19:16:14 +08:00
+
+- 任务：整理 `DEV_LOG.md` 历史记录顺序，并明确后续 AI 只能按时间顺序追加日志。
+- 改动：
+  - 将历史日志按时间从旧到新排序。
+  - 更新 `DEV_LOG.md` 文件说明，要求新记录追加到文件末尾。
+  - 更新 `AGENTS.md` 的 AI 变更记录规则，明确日志升序和末尾追加要求。
+- 文件：
+  - `AGENTS.md`
+  - `DEV_LOG.md`
+- 验证：
+  - Node REPL 脚本解析 `DEV_LOG.md` 时间标题并确认升序：通过。
+  - `git diff --check -- AGENTS.md DEV_LOG.md`：通过。
+- 风险：
+  - 未运行项目 typecheck/lint/test/build；本次仅整理文档。

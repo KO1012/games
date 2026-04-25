@@ -86,11 +86,10 @@ corepack pnpm run build
 
 当前 Phaser 打包体积会触发 Vite 警告，但不影响构建成功。后续可通过动态导入或手动分包优化。
 
-### 刷新页面后不能 30 秒重连
+### 刷新页面后如何 30 秒重连
 
-断线 30 秒重连尚未实现，当前刷新会按离开房间处理。该能力已在 `NETWORK_SPEC.md` 和 `ROADMAP.md` 标为 TODO。
+房间连接后客户端会保存 Colyseus `reconnectionToken`。异常断线或刷新页面后，30 秒内重新打开客户端会优先回连原房间；超过窗口后服务端会移除席位。
 
 ### `.env`、`dist/`、`node_modules/` 是否应该提交
 
 不应该提交。仓库通过 `.gitignore` 排除了依赖目录、构建产物、日志和环境变量文件。
-
