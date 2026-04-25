@@ -55,6 +55,8 @@ type DirectionPulseTicks = {
   down: number;
 };
 
+type AxisIntent = -1 | 0 | 1;
+
 type PlayerRecord = PlayerSnapshot & {
   inputQueue: InputMessage[];
   lastInput: InputMessage | null;
@@ -62,6 +64,8 @@ type PlayerRecord = PlayerSnapshot & {
   interactQueued: boolean;
   jumpQueued: boolean;
   directionPulseTicks: DirectionPulseTicks;
+  horizontalIntent: AxisIntent;
+  verticalIntent: AxisIntent;
 };
 
 type ButtonRuntime = {
@@ -204,7 +208,14 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       lastInputAt: 0,
       interactQueued: false,
       jumpQueued: false,
-      directionPulseTicks: { left: 0, right: 0, up: 0, down: 0 },
+      directionPulseTicks: {
+        left: 0,
+        right: 0,
+        up: 0,
+        down: 0,
+      },
+      horizontalIntent: 0,
+      verticalIntent: 0,
     });
 
     client.send("room_joined", {
@@ -248,8 +259,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
     for (const remainingPlayer of this.playersBySessionId.values()) {
       remainingPlayer.ready = false;
-      remainingPlayer.inputQueue = [];
-      this.resetDirectionPulses(remainingPlayer);
+      this.resetPlayerInputState(remainingPlayer);
     }
 
     this.phase = ROOM_PHASES.waiting;
@@ -320,7 +330,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   private handleInput(client: CoopClient, message: InputMessage): void {
     const player = this.playersBySessionId.get(client.sessionId);
 
-    if (!player || this.phase !== ROOM_PHASES.playing || !isValidInputMessage(message)) {
+    if (!player || !this.canProcessPlayerInput() || !isValidInputMessage(message)) {
       return;
     }
 
@@ -385,7 +395,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
         continue;
       }
 
-      if (this.phase !== ROOM_PHASES.playing) {
+      if (!this.canProcessPlayerInput()) {
         player.vx = 0;
         player.vy = player.grounded ? 0 : player.vy;
         continue;
@@ -396,50 +406,30 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     }
   }
 
-  /**
-   * Collapse everything that happened during this tick into a single
-   * effective input:
-   * - Direction / jump flags are OR-merged across all queued messages plus the
-   *   previous held baseline so a very short tap (keydown + keyup landing in
-   *   the same tick) still registers.
-   * - Whenever a direction transitions from released→pressed anywhere in the
-   *   queue (a press edge), the corresponding `directionPulseTicks` counter is
-   *   refreshed to `directionPulseTicks`. While the counter is positive the
-   *   direction stays forced-on, which guarantees every tap produces a visible
-   *   burst of movement even if the physical key release beats the network
-   *   back to the server.
-   * - One-shot pulses (jumpPressed / interactPressed) are OR-merged across the
-   *   queue but NOT added to `lastInput`, so they fire at most once.
-   *
-   * `player.lastInput` is updated to the last received message so the next
-   * empty-queue tick continues applying the current held state.
-   */
+  private canProcessPlayerInput(): boolean {
+    return this.phase === ROOM_PHASES.playing || this.isWarmupActive();
+  }
+
+  private isWarmupActive(): boolean {
+    return this.phase === ROOM_PHASES.waiting && this.playersBySessionId.size === 1;
+  }
+
   private consumePlayerInputsForTick(player: PlayerRecord): InputMessage {
     const baseline = player.lastInput ?? createNeutralInput();
 
-    let mergedLeft = baseline.left;
-    let mergedRight = baseline.right;
-    let mergedUp = baseline.up;
-    let mergedDown = baseline.down;
-    let mergedJump = baseline.jump;
-    let mergedJumpPressed = false;
-    let mergedInteractPressed = false;
+    let heldLeft = baseline.left;
+    let heldRight = baseline.right;
+    let heldUp = baseline.up;
+    let heldDown = baseline.down;
+    let heldJump = baseline.jump;
+
+    let jumpPressed = false;
+    let interactPressed = false;
 
     let seq = baseline.seq;
     let clientTime = baseline.clientTime;
 
     if (player.inputQueue.length > 0) {
-      // The queue represents everything that happened during this tick. The
-      // effective direction is the OR of the queued inputs only (not the
-      // previous baseline), so a "release" sent mid-tick can actually stop
-      // the player this tick. The baseline is only used to seed edge
-      // detection (`prev*`).
-      mergedLeft = false;
-      mergedRight = false;
-      mergedUp = false;
-      mergedDown = false;
-      mergedJump = false;
-
       let prevLeft = baseline.left;
       let prevRight = baseline.right;
       let prevUp = baseline.up;
@@ -448,26 +438,76 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       const queuedInputs = [...player.inputQueue].sort((a, b) => a.seq - b.seq);
 
       for (const input of queuedInputs) {
-        if (input.left && !prevLeft) {
-          player.directionPulseTicks.left = Math.max(player.directionPulseTicks.left, directionPulseTicks);
-        }
-        if (input.right && !prevRight) {
-          player.directionPulseTicks.right = Math.max(player.directionPulseTicks.right, directionPulseTicks);
-        }
-        if (input.up && !prevUp) {
-          player.directionPulseTicks.up = Math.max(player.directionPulseTicks.up, directionPulseTicks);
-        }
-        if (input.down && !prevDown) {
-          player.directionPulseTicks.down = Math.max(player.directionPulseTicks.down, directionPulseTicks);
+        const isLatestSnapshot = input.seq >= seq;
+        const axisX = Number(input.right) - Number(input.left);
+        const axisY = Number(input.down) - Number(input.up);
+
+        if (isLatestSnapshot && axisX > 0) {
+          player.horizontalIntent = 1;
+          player.directionPulseTicks.left = 0;
+        } else if (isLatestSnapshot && axisX < 0) {
+          player.horizontalIntent = -1;
+          player.directionPulseTicks.right = 0;
         }
 
-        mergedLeft = mergedLeft || input.left;
-        mergedRight = mergedRight || input.right;
-        mergedUp = mergedUp || input.up;
-        mergedDown = mergedDown || input.down;
-        mergedJump = mergedJump || input.jump;
-        mergedJumpPressed = mergedJumpPressed || input.jumpPressed;
-        mergedInteractPressed = mergedInteractPressed || input.interactPressed;
+        if (isLatestSnapshot && axisY > 0) {
+          player.verticalIntent = 1;
+          player.directionPulseTicks.up = 0;
+        } else if (isLatestSnapshot && axisY < 0) {
+          player.verticalIntent = -1;
+          player.directionPulseTicks.down = 0;
+        }
+
+        if (input.left && !prevLeft) {
+          player.directionPulseTicks.left = Math.max(player.directionPulseTicks.left, directionPulseTicks);
+          if (isLatestSnapshot) {
+            player.directionPulseTicks.right = 0;
+            player.horizontalIntent = -1;
+          }
+        }
+
+        if (input.right && !prevRight) {
+          player.directionPulseTicks.right = Math.max(player.directionPulseTicks.right, directionPulseTicks);
+          if (isLatestSnapshot) {
+            player.directionPulseTicks.left = 0;
+            player.horizontalIntent = 1;
+          }
+        }
+
+        if (input.up && !prevUp) {
+          player.directionPulseTicks.up = Math.max(player.directionPulseTicks.up, directionPulseTicks);
+          if (isLatestSnapshot) {
+            player.directionPulseTicks.down = 0;
+            player.verticalIntent = -1;
+          }
+        }
+
+        if (input.down && !prevDown) {
+          player.directionPulseTicks.down = Math.max(player.directionPulseTicks.down, directionPulseTicks);
+          if (isLatestSnapshot) {
+            player.directionPulseTicks.up = 0;
+            player.verticalIntent = 1;
+          }
+        }
+
+        // Direction held state must follow the latest snapshot.
+        // Do NOT OR-merge left/right/up/down here.
+        // Late old snapshots can refresh pulse visibility, but must not replace
+        // the current held state or latest direction intent.
+        // Short taps are represented by directionPulseTicks.
+        if (isLatestSnapshot) {
+          heldLeft = input.left;
+          heldRight = input.right;
+          heldUp = input.up;
+          heldDown = input.down;
+          heldJump = input.jump;
+          seq = input.seq;
+          clientTime = input.clientTime;
+          player.lastInput = input;
+        }
+
+        jumpPressed = jumpPressed || input.jumpPressed;
+        interactPressed = interactPressed || input.interactPressed;
 
         prevLeft = input.left;
         prevRight = input.right;
@@ -475,24 +515,40 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
         prevDown = input.down;
       }
 
-      const last = queuedInputs[queuedInputs.length - 1]!;
-      seq = last.seq;
-      clientTime = last.clientTime;
-      player.lastInput = last;
       player.inputQueue = [];
+    }
+
+    let effectiveLeft = heldLeft || player.directionPulseTicks.left > 0;
+    let effectiveRight = heldRight || player.directionPulseTicks.right > 0;
+    let effectiveUp = heldUp || player.directionPulseTicks.up > 0;
+    let effectiveDown = heldDown || player.directionPulseTicks.down > 0;
+
+    if (effectiveLeft && effectiveRight) {
+      if (player.horizontalIntent > 0) {
+        effectiveLeft = false;
+      } else if (player.horizontalIntent < 0) {
+        effectiveRight = false;
+      } else {
+        effectiveLeft = false;
+        effectiveRight = false;
+      }
+    }
+
+    if (effectiveUp && effectiveDown) {
+      if (player.verticalIntent > 0) {
+        effectiveUp = false;
+      } else if (player.verticalIntent < 0) {
+        effectiveDown = false;
+      } else {
+        effectiveUp = false;
+        effectiveDown = false;
+      }
     }
 
     if (player.directionPulseTicks.left > 0) player.directionPulseTicks.left -= 1;
     if (player.directionPulseTicks.right > 0) player.directionPulseTicks.right -= 1;
     if (player.directionPulseTicks.up > 0) player.directionPulseTicks.up -= 1;
     if (player.directionPulseTicks.down > 0) player.directionPulseTicks.down -= 1;
-
-    // Sustain direction while the tap pulse is still active, but never force
-    // the direction back on once the player has already returned to rest.
-    const effectiveLeft = mergedLeft || player.directionPulseTicks.left > 0;
-    const effectiveRight = mergedRight || player.directionPulseTicks.right > 0;
-    const effectiveUp = mergedUp || player.directionPulseTicks.up > 0;
-    const effectiveDown = mergedDown || player.directionPulseTicks.down > 0;
 
     return {
       type: "input",
@@ -502,9 +558,9 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       right: effectiveRight,
       up: effectiveUp,
       down: effectiveDown,
-      jump: mergedJump,
-      jumpPressed: mergedJumpPressed,
-      interactPressed: mergedInteractPressed,
+      jump: heldJump,
+      jumpPressed,
+      interactPressed,
     };
   }
 
@@ -521,11 +577,18 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       player.alive = true;
       player.grounded = true;
       player.respawnAt = 0;
-      player.inputQueue = [];
-      player.interactQueued = false;
-      player.jumpQueued = false;
-      this.resetDirectionPulses(player);
+      this.resetPlayerInputState(player);
     }
+  }
+
+  private resetPlayerInputState(player: PlayerRecord): void {
+    player.inputQueue = [];
+    player.lastInput = null;
+    player.interactQueued = false;
+    player.jumpQueued = false;
+    player.horizontalIntent = 0;
+    player.verticalIntent = 0;
+    this.resetDirectionPulses(player);
   }
 
   private resetDirectionPulses(player: PlayerRecord): void {
@@ -839,10 +902,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     player.vx = 0;
     player.vy = 0;
     player.respawnAt = now + PLAYER_RESPAWN_MS;
-    player.inputQueue = [];
-    player.lastInput = null;
-    player.interactQueued = false;
-    this.resetDirectionPulses(player);
+    this.resetPlayerInputState(player);
     this.exitHoldStartedAt = null;
     this.activeExitId = null;
   }
@@ -985,10 +1045,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       player.grounded = true;
       player.alive = true;
       player.respawnAt = 0;
-      player.inputQueue = [];
-      player.lastInput = null;
-      player.interactQueued = false;
-      this.resetDirectionPulses(player);
+      this.resetPlayerInputState(player);
     }
   }
 

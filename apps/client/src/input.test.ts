@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createDirectionTapInput,
   isNeutralDirectionInput,
   KeyboardInputBuffer,
   normalizeGameKeyCode,
@@ -102,19 +101,4 @@ describe("KeyboardInputBuffer", () => {
     expect(normalizeGameKeyCode("", "Escape")).toBeNull();
   });
 
-  it("creates a one-tick direction tap for missed keydown recovery", () => {
-    expect(createDirectionTapInput("ArrowRight")).toMatchObject({
-      left: false,
-      right: true,
-      up: false,
-      down: false,
-    });
-    expect(createDirectionTapInput("KeyA")).toMatchObject({
-      left: true,
-      right: false,
-      up: false,
-      down: false,
-    });
-    expect(createDirectionTapInput("Space")).toBeNull();
-  });
 });

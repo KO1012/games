@@ -5,8 +5,6 @@ export type DirectionInput = Pick<
   "left" | "right" | "up" | "down" | "jump" | "jumpPressed" | "interactPressed"
 >;
 
-export type DirectionKey = "left" | "right" | "up" | "down";
-
 export const gameKeyCodes = new Set([
   "ArrowLeft",
   "ArrowRight",
@@ -151,43 +149,6 @@ export function isNeutralDirectionInput(input: DirectionInput): boolean {
     !input.jumpPressed &&
     !input.interactPressed
   );
-}
-
-export function createDirectionTapInput(code: string): DirectionInput | null {
-  const direction = getDirectionKey(code);
-
-  if (!direction) {
-    return null;
-  }
-
-  return {
-    left: direction === "left",
-    right: direction === "right",
-    up: direction === "up",
-    down: direction === "down",
-    jump: false,
-    jumpPressed: false,
-    interactPressed: false,
-  };
-}
-
-function getDirectionKey(code: string): DirectionKey | null {
-  switch (code) {
-    case "ArrowLeft":
-    case "KeyA":
-      return "left";
-    case "ArrowRight":
-    case "KeyD":
-      return "right";
-    case "ArrowUp":
-    case "KeyW":
-      return "up";
-    case "ArrowDown":
-    case "KeyS":
-      return "down";
-    default:
-      return null;
-  }
 }
 
 function isPressedKey(code: string): boolean {

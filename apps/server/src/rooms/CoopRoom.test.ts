@@ -56,6 +56,82 @@ describe("CoopRoom", () => {
     expect(harness.isLocked()).toBe(true);
   });
 
+  it("lets the first player move during one-player warmup", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+
+    await join(harness.room, firstClient, "Alice");
+
+    const beforeInput = harness.getSnapshot().players.A;
+
+    await harness.receive("input", firstClient, {
+      type: "input",
+      seq: 1,
+      clientTime: Date.now(),
+      left: false,
+      right: true,
+      up: false,
+      down: false,
+      jump: false,
+      jumpPressed: false,
+      interactPressed: false,
+    });
+    harness.step(100);
+
+    const afterInput = harness.getSnapshot().players.A;
+
+    expect(harness.getSnapshot().phase).toBe(ROOM_PHASES.waiting);
+    expect(beforeInput).toBeDefined();
+    expect(afterInput).toBeDefined();
+    expect(afterInput?.x).toBeGreaterThan(beforeInput?.x ?? 0);
+    expect(afterInput?.lastProcessedInputSeq).toBe(1);
+  });
+
+  it("pauses warmup movement when the second player joins ready check", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+    const secondClient = createClient("session-b");
+
+    await join(harness.room, firstClient, "Alice");
+    await harness.receive("input", firstClient, {
+      type: "input",
+      seq: 1,
+      clientTime: Date.now(),
+      left: false,
+      right: true,
+      up: false,
+      down: false,
+      jump: false,
+      jumpPressed: false,
+      interactPressed: false,
+    });
+    harness.step(100);
+
+    await join(harness.room, secondClient, "Bob");
+
+    const beforeReadyCheckStep = harness.getSnapshot().players.A?.x ?? 0;
+
+    await harness.receive("input", firstClient, {
+      type: "input",
+      seq: 2,
+      clientTime: Date.now(),
+      left: false,
+      right: true,
+      up: false,
+      down: false,
+      jump: false,
+      jumpPressed: false,
+      interactPressed: false,
+    });
+    harness.step(100);
+
+    const afterReadyCheckStep = harness.getSnapshot().players.A;
+
+    expect(harness.getSnapshot().phase).toBe(ROOM_PHASES.readyCheck);
+    expect(afterReadyCheckStep?.x).toBe(beforeReadyCheckStep);
+    expect(afterReadyCheckStep?.lastProcessedInputSeq).toBe(1);
+  });
+
   it("rejects a third player", async () => {
     const harness = await createHarness();
     const firstClient = createClient("session-a");
@@ -266,12 +342,18 @@ describe("CoopRoom", () => {
     const afterTick3 = harness.getSnapshot().players.A;
     expect(afterTick3?.x).toBeGreaterThan(tick2X);
 
-    // Tick 4: the pulse has fully decayed and no new input has arrived, so
-    // the player must come to rest.
+    // Tick 4: the pulse is still visible for its final frame.
     const tick3X = afterTick3?.x ?? 0;
     harness.step(1000 / 60);
     const afterTick4 = harness.getSnapshot().players.A;
-    expect(afterTick4?.x).toBe(tick3X);
+    expect(afterTick4?.x).toBeGreaterThan(tick3X);
+
+    // Tick 5: the pulse has fully decayed and no new input has arrived, so
+    // the player must come to rest.
+    const tick4X = afterTick4?.x ?? 0;
+    harness.step(1000 / 60);
+    const afterTick5 = harness.getSnapshot().players.A;
+    expect(afterTick5?.x).toBe(tick4X);
   });
 
   it("accepts a late directional press when release arrives first in the same tap", async () => {

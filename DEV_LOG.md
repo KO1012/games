@@ -456,3 +456,83 @@
 - 风险：
   - Browser Use 自动化多次卡在 `locator.press`，未能完成稳定的双浏览器循环长按测试；运行态输入可靠性主要通过 Colyseus SDK 和自动化测试验证。
   - 本机 PowerShell 启动异常，本次验证命令通过 Node 子进程执行。
+
+## 2026-04-25 17:26:28 +08:00
+
+- 任务：修复 P0 方向键移动两三次后像失灵的问题，消除客户端 delayed keyup、服务端方向 OR-merge 和相反方向抵消。
+- 改动：
+  - 客户端 `main.ts` 删除方向键 delayed release，只发送真实物理按键状态。
+  - 删除客户端 `createDirectionTapInput` 死代码和旧的“客户端补短按”测试。
+  - 服务端 `PlayerRecord` 增加持久 `horizontalIntent` / `verticalIntent`，输入重置点统一调用 `resetPlayerInputState()`。
+  - 服务端 `consumePlayerInputsForTick()` 改为 held 方向使用最新输入快照，短 tap 只靠 `directionPulseTicks`，并在进入物理层前消解 left/right、up/down 冲突。
+  - 新增服务端方向冲突回归测试，覆盖同 tick 相反方向、intent 持久化、释放后恢复对向 held、短 tap pulse、上下方向冲突。
+- 文件：
+  - `apps/client/src/main.ts`
+  - `apps/client/src/input.ts`
+  - `apps/client/src/input.test.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `apps/server/src/rooms/CoopRoom.input.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack enable`：通过。
+  - `corepack prepare pnpm@10.33.2 --activate`：通过。
+  - `pnpm install`：通过；pnpm 提示忽略 `esbuild`、`msgpackr-extract` build scripts。
+  - `pnpm typecheck`：通过。
+  - `pnpm lint`：通过。
+  - `pnpm test`：通过；shared 2 个测试文件 6 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 17 个测试。
+  - `pnpm build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - `rg "createDirectionTapInput|minDirectionTapMs|pendingDirectionReleaseIds|getDirectionReleaseDelayMs|scheduleDirectionRelease|releaseBufferedKey|clearPendingDirectionRelease|clearPendingDirectionReleases" apps/client/src/main.ts`：无输出。
+  - `rg "createDirectionTapInput|DirectionKey|getDirectionKey" apps`：无输出。
+  - `rg "horizontalIntent|verticalIntent|effectiveLeft && effectiveRight|effectiveUp && effectiveDown|directionPulseTicks.right = 0|directionPulseTicks.left = 0" apps/server/src/rooms/CoopRoom.ts`：能看到持久意图、冲突消解、对向 pulse 清理逻辑。
+  - `rg "Number\\(input.right\\) - Number\\(input.left\\)" apps/server/src/rooms/CoopRoom.ts`：确认物理层仍使用 `right-left` 算水平轴。
+  - `pnpm dev`：客户端 `5173`、服务端 `2567` 启动成功，验证后已停止。
+- 风险：
+  - 未完成真实双浏览器人工方向键全流程；Browser Use 当前只保留一个 in-app 标签，且自动化键盘 API 不能稳定模拟长按/松开组合。
+  - 本机 PowerShell 启动异常，本次验证命令通过 Node 子进程执行；`rg` 因 WindowsApps 路径执行权限问题，复制到临时目录后运行。
+
+## 2026-04-25 17:31:16 +08:00
+
+- 任务：点击 CREATE 后不等第二人和 Ready，先显示关卡画面，并允许房主单人热身移动。
+- 改动：
+  - 客户端将 `waiting + 1人` 识别为 warmup 状态，允许发送游戏输入并拦截方向键默认行为。
+  - HUD 在单人 warmup 时显示 `Warmup level-001 (1/2)`。
+  - 服务端允许 `waiting + 1人` 时处理输入和模拟移动；第二人加入进入 ready check 后暂停热身移动。
+  - 新增服务端测试覆盖单人 warmup 可移动、第二人加入 ready check 后暂停移动。
+- 文件：
+  - `apps/client/src/main.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `pnpm typecheck`：通过。
+  - `pnpm lint`：通过。
+  - `pnpm test`：通过；shared 2 个测试文件 6 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 19 个测试。
+  - `pnpm build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - `pnpm dev`：客户端 `5173`、服务端 `2567` 启动成功。
+  - In-app browser 复测 `http://127.0.0.1:5173/`：点击 CREATE 后显示房间号、角色 A、`Warmup level-001 (1/2)`，关卡画面已渲染。
+  - Colyseus SDK 运行态验证：单人 waiting 阶段 A 从 `x=80` 移动到 `x=172.82`，发送停止输入后停住。
+- 风险：
+  - 未做真实键盘手动长按测试；浏览器自动化只验证了 CREATE 后 warmup 状态和画面，移动通过服务端测试与 SDK 运行态验证。
+  - 本次保留 `pnpm dev` 运行中，方便继续在 `http://127.0.0.1:5173/` 手测。
+
+## 2026-04-25 17:37:58 +08:00
+
+- 任务：继续处理方向键仍偶发异常的问题。
+- 改动：
+  - 服务端 `consumePlayerInputsForTick()` 对迟到的旧方向快照只刷新短按 pulse，不再覆盖当前 held 状态、`lastInput` 或最新方向意图。
+  - 保留旧方向包的短 tap 可见性，同时避免旧包在当前方向之后到达时抢占 horizontal/vertical intent。
+  - 新增回归测试覆盖“释放包先被消费、旧按下包后到”不会变成持续 held，以及旧反方向 pulse 不会覆盖当前 held 方向。
+- 文件：
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.input.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `pnpm typecheck`：通过。
+  - `pnpm lint`：通过。
+  - `pnpm test`：通过；shared 2 个测试文件 6 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 21 个测试。
+  - `pnpm build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - 运行态方向验证：单人 warmup 长按右方向从 `x=80` 到 `x=134.86`，释放后停住；快速右 tap 从 `x=80` 到 `x=106`。
+  - 运行态乱序验证：先发 `seq=2` 释放，再发迟到 `seq=1` 右按下，角色从 `x=80` 短暂移动到 `x=111.98` 后停住，`lastProcessedInputSeq=2`。
+- 风险：
+  - 仍未拿到用户现场的具体按键序列；如果问题来自浏览器实际 keydown/keyup 丢失或焦点，需继续抓客户端发包日志定位。

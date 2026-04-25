@@ -16,7 +16,6 @@ import Phaser from "phaser";
 
 import { unlockAudio } from "./audio/SoundManager.js";
 import {
-  createDirectionTapInput,
   isNeutralDirectionInput,
   KeyboardInputBuffer,
   normalizeGameKeyCode,
@@ -43,8 +42,6 @@ let restartRequested = false;
 let latestPingMs: number | null = null;
 let lastSentInput: DirectionInput | null = null;
 const keyboardInput = new KeyboardInputBuffer();
-const minDirectionTapMs = 70;
-const pendingDirectionReleaseIds = new Map<string, number>();
 let latestRoomState: GameState = {
   phase: ROOM_PHASES.waiting,
   roomCode: "----",
@@ -257,7 +254,7 @@ function stopInputLoop(): void {
 }
 
 function sendCurrentInput(inputOverride: DirectionInput | null = null): void {
-  if (!activeRoom || !myRole || latestRoomState.phase !== ROOM_PHASES.playing) return;
+  if (!activeRoom || !myRole || !canSendGameplayInput()) return;
   const nextInput = inputOverride ?? readCurrentInput();
 
   if (
@@ -278,7 +275,6 @@ function sendCurrentInput(inputOverride: DirectionInput | null = null): void {
 }
 
 function clearBufferedInput(): void {
-  clearPendingDirectionReleases();
   keyboardInput.clear();
   sendCurrentInput(keyboardInput.snapshot(null));
 }
@@ -291,86 +287,29 @@ function handleGameKeyDown(event: KeyboardEvent): void {
   const code = normalizeGameKeyCode(event.code, event.key);
 
   if (!code) return;
-  clearPendingDirectionRelease(code);
-  if (latestRoomState.phase === ROOM_PHASES.playing) {
+
+  if (canSendGameplayInput()) {
     event.preventDefault();
     event.stopPropagation();
   }
-  if (keyboardInput.handleKeyDown(code, event.repeat)) sendCurrentInput();
+
+  if (keyboardInput.handleKeyDown(code, event.repeat)) {
+    sendCurrentInput();
+  }
 }
 
 function handleGameKeyUp(event: KeyboardEvent): void {
   const code = normalizeGameKeyCode(event.code, event.key);
 
   if (!code) return;
-  if (latestRoomState.phase === ROOM_PHASES.playing) {
+  if (canSendGameplayInput()) {
     event.preventDefault();
     event.stopPropagation();
   }
 
-  const releaseDelayMs = getDirectionReleaseDelayMs(code);
-
-  if (releaseDelayMs > 0) {
-    scheduleDirectionRelease(code, releaseDelayMs);
-    return;
-  }
-
-  releaseBufferedKey(code);
-}
-
-function getDirectionReleaseDelayMs(code: string): number {
-  if (!createDirectionTapInput(code)) {
-    return 0;
-  }
-
-  const heldDurationMs = keyboardInput.heldDurationMs(code);
-
-  if (heldDurationMs === null) {
-    return 0;
-  }
-
-  return Math.max(0, minDirectionTapMs - heldDurationMs);
-}
-
-function scheduleDirectionRelease(code: string, delayMs: number): void {
-  clearPendingDirectionRelease(code);
-  const timerId = window.setTimeout(() => {
-    pendingDirectionReleaseIds.delete(code);
-    releaseBufferedKey(code);
-  }, delayMs);
-  pendingDirectionReleaseIds.set(code, timerId);
-}
-
-function releaseBufferedKey(code: string): void {
   if (keyboardInput.handleKeyUp(code)) {
     sendCurrentInput();
-    return;
   }
-
-  const missedTapInput = createDirectionTapInput(code);
-
-  if (missedTapInput) {
-    sendCurrentInput(missedTapInput);
-    sendCurrentInput(keyboardInput.snapshot(null));
-  }
-}
-
-function clearPendingDirectionRelease(code: string): void {
-  const timerId = pendingDirectionReleaseIds.get(code);
-
-  if (timerId === undefined) {
-    return;
-  }
-
-  window.clearTimeout(timerId);
-  pendingDirectionReleaseIds.delete(code);
-}
-
-function clearPendingDirectionReleases(): void {
-  for (const timerId of pendingDirectionReleaseIds.values()) {
-    window.clearTimeout(timerId);
-  }
-  pendingDirectionReleaseIds.clear();
 }
 
 // ── Ping loop ────────────────────────────────────────────────────
@@ -440,6 +379,12 @@ function updateHudFromState(message: RoomStateMessage): void {
     setStatus(`Playing ${message.levelId ?? "level"} (${playerCount}/2)`);
     return;
   }
+
+  if (isWarmupState(message)) {
+    setStatus(`Warmup ${message.levelId ?? "level"} (1/2)`);
+    return;
+  }
+
   if (message.phase === ROOM_PHASES.readyCheck) {
     const readyCount = Object.values(message.players).filter((p) => p?.ready).length;
     setStatus(`Ready check (${readyCount}/2)`);
@@ -490,6 +435,14 @@ function updateActionButtons(): void {
   restartButton.disabled = !canRestart;
   readyButton.textContent = readySent ? "READY ✓" : "READY";
   restartButton.textContent = restartRequested ? "RESTART ✓" : "RESTART";
+}
+
+function canSendGameplayInput(): boolean {
+  return latestRoomState.phase === ROOM_PHASES.playing || isWarmupState(latestRoomState);
+}
+
+function isWarmupState(state: RoomStateMessage): boolean {
+  return state.phase === ROOM_PHASES.waiting && Boolean(myRole) && Object.keys(state.players).length === 1;
 }
 
 // ── Utilities ────────────────────────────────────────────────────
