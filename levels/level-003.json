@@ -1,161 +1,47 @@
 {
   "schemaVersion": 1,
   "id": "level-003",
-  "name": "Upper Switchback",
-  "world": {
-    "width": 1280,
-    "height": 720,
-    "gravity": 1800,
-    "background": "platformer"
+  "name": "Timed Sprint",
+  "metadata": {
+    "title": "Timed Sprint",
+    "difficulty": 2,
+    "introText": "The far gate only stays open for a short window after the timed plate is triggered.",
+    "hintText": "One player taps the plate; both must clear the gate before it closes.",
+    "mechanicTags": ["pressure", "timed", "door", "sprint"],
+    "parTimeMs": 40000
   },
+  "world": { "width": 1280, "height": 720, "gravity": 1800, "background": "platformer" },
   "players": [
-    {
-      "playerIndex": 0,
-      "x": 80,
-      "y": 608,
-      "facing": 1
-    },
-    {
-      "playerIndex": 1,
-      "x": 140,
-      "y": 608,
-      "facing": 1
-    }
+    { "playerIndex": 0, "x": 80, "y": 608, "facing": 1 },
+    { "playerIndex": 1, "x": 140, "y": 608, "facing": 1 }
   ],
   "platforms": [
-    {
-      "id": "wall-left",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "wall-right",
-      "type": "solid",
-      "rect": {
-        "x": 1256,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "floor-main",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 656,
-        "w": 1280,
-        "h": 64
-      }
-    },
-    {
-      "id": "upper-a",
-      "type": "oneWay",
-      "rect": {
-        "x": 250,
-        "y": 560,
-        "w": 180,
-        "h": 24
-      }
-    },
-    {
-      "id": "upper-b",
-      "type": "oneWay",
-      "rect": {
-        "x": 500,
-        "y": 500,
-        "w": 180,
-        "h": 24
-      }
-    },
-    {
-      "id": "upper-c",
-      "type": "oneWay",
-      "rect": {
-        "x": 780,
-        "y": 560,
-        "w": 180,
-        "h": 24
-      }
-    },
-    {
-      "id": "exit-hop",
-      "type": "oneWay",
-      "rect": {
-        "x": 1030,
-        "y": 560,
-        "w": 130,
-        "h": 24
-      }
-    }
+    { "id": "wall-left", "type": "solid", "rect": { "x": 0, "y": 0, "w": 24, "h": 720 } },
+    { "id": "wall-right", "type": "solid", "rect": { "x": 1256, "y": 0, "w": 24, "h": 720 } },
+    { "id": "floor-main", "type": "solid", "rect": { "x": 0, "y": 656, "w": 1280, "h": 64 } },
+    { "id": "ledge-mid", "type": "oneWay", "rect": { "x": 540, "y": 540, "w": 200, "h": 24 } }
   ],
   "buttons": [
     {
-      "id": "button-high-left",
-      "kind": "pressure",
+      "id": "button-timer",
+      "kind": "timed",
       "mode": "hold",
-      "rect": {
-        "x": 318,
-        "y": 536,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "door-a",
-          "action": "open"
-        }
-      ]
-    },
-    {
-      "id": "button-high-right",
-      "kind": "pressure",
-      "mode": "hold",
-      "rect": {
-        "x": 840,
-        "y": 536,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "door-a",
-          "action": "open"
-        }
-      ]
+      "rect": { "x": 240, "y": 632, "w": 64, "h": 24 },
+      "holdMs": 4500,
+      "cooldownMs": 0,
+      "targets": [{ "targetId": "door-late", "action": "open" }]
     }
   ],
   "doors": [
     {
-      "id": "door-a",
-      "rect": {
-        "x": 640,
-        "y": 360,
-        "w": 40,
-        "h": 296
-      },
+      "id": "door-late",
+      "rect": { "x": 940, "y": 360, "w": 40, "h": 296 },
       "startsOpen": false,
-      "openDurationMs": 150,
-      "colorKey": "orange"
+      "colorKey": "amber"
     }
   ],
   "traps": [],
   "exits": [
-    {
-      "id": "exit-a",
-      "rect": {
-        "x": 1160,
-        "y": 560,
-        "w": 72,
-        "h": 96
-      },
-      "requiresBothPlayers": true,
-      "holdMs": 500
-    }
+    { "id": "exit-a", "rect": { "x": 1160, "y": 560, "w": 72, "h": 96 }, "requiresBothPlayers": true, "holdMs": 500 }
   ]
 }

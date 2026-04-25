@@ -32,4 +32,10 @@ export default [
       globals: globals.node,
     },
   },
+  {
+    files: ["apps/client/scripts/**/*.mjs"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ];

@@ -30,7 +30,8 @@ body {
 /* ── Buttons ───────────────────────────────────────────────────── */
 
 button,
-input {
+input,
+select {
   font-family: "Press Start 2P", monospace;
   font-size: 9px;
 }
@@ -64,12 +65,14 @@ button:active:not(:disabled) {
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+select:disabled {
   cursor: not-allowed;
   opacity: 0.4;
 }
 
-input {
+input,
+select {
   width: 80px;
   height: 38px;
   border: 2px solid #334155;
@@ -83,7 +86,18 @@ input {
   text-align: center;
 }
 
-input:focus {
+select {
+  width: 180px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%),
+    linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+  background-position: calc(100% - 14px) 15px, calc(100% - 9px) 15px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+input:focus,
+select:focus {
   border-color: #38bdf8;
   outline: none;
 }
@@ -178,6 +192,19 @@ canvas {
   gap: 6px;
 }
 
+.level-picker {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-picker span {
+  color: #94a3b8;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+}
+
 /* ── HUD ───────────────────────────────────────────────────────── */
 
 .hud {
@@ -229,6 +256,12 @@ canvas {
 
 .hud strong.error {
   color: #fca5a5;
+}
+
+#level-label {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Input debug overlay ───────────────────────────────────────── */
@@ -286,6 +319,120 @@ canvas {
     width: calc(100vw - 24px);
     max-height: 42vh;
     font-size: 10px;
+  }
+}
+
+/* ── Audio controls ────────────────────────────────────────────── */
+
+.audio-controls {
+  position: absolute;
+  z-index: 4;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#volume-toggle {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid #38bdf8;
+  background: rgba(11, 14, 26, 0.85);
+  color: #f8fafc;
+  font-family: "Press Start 2P", monospace;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #1a7ab5;
+}
+
+#volume-toggle:hover {
+  background: #1a3047;
+}
+
+.volume-panel {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 180px;
+  padding: 12px 14px;
+  border: 2px solid #38bdf8;
+  background: rgba(11, 14, 26, 0.92);
+  box-shadow: 3px 3px 0 #1a7ab5;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.volume-panel.open {
+  display: flex;
+}
+
+.volume-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #94a3b8;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.volume-panel input[type="range"] {
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0;
+}
+
+.volume-panel input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #131729;
+  border: 1px solid #38bdf8;
+}
+
+.volume-panel input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  background: #38bdf8;
+  border: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+.volume-panel input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: #131729;
+  border: 1px solid #38bdf8;
+}
+
+.volume-panel input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #38bdf8;
+  border: 0;
+  cursor: pointer;
+}
+
+#volume-mute {
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  font-size: 8px;
+}
+
+@media (max-width: 760px) {
+  .audio-controls {
+    left: 12px;
+    bottom: 160px;
   }
 }
 

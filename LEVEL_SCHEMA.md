@@ -33,6 +33,7 @@ levels/
   "schemaVersion": 1,
   "id": "level-001",
   "name": "基础配合",
+  "metadata": {},
   "world": {},
   "players": [],
   "platforms": [],
@@ -76,6 +77,9 @@ levels/
       "type": "string",
       "minLength": 1,
       "maxLength": 64
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
     },
     "world": {
       "$ref": "#/$defs/world"
@@ -121,6 +125,46 @@ levels/
     }
   },
   "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "difficulty", "introText", "hintText", "mechanicTags", "parTimeMs"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "difficulty": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "introText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "hintText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "mechanicTags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "maxLength": 24
+          }
+        },
+        "parTimeMs": {
+          "type": "integer",
+          "minimum": 1000
+        }
+      }
+    },
     "world": {
       "type": "object",
       "additionalProperties": false,
@@ -246,7 +290,7 @@ levels/
         },
         "mode": {
           "type": "string",
-          "enum": ["hold"]
+          "enum": ["hold", "toggle"]
         },
         "rect": {
           "$ref": "#/$defs/rect"
@@ -405,6 +449,7 @@ JSON Schema 只能检查结构，加载器还必须检查：
 - 所有矩形必须在 `world.width` 和 `world.height` 范围内。
 - 出生点不能与 solid 平台、关闭门或陷阱重叠。
 - 常规关卡至少有一个出口 `requiresBothPlayers = true`；`level-debug-input` 调试关卡允许单人出口。
+- `metadata` 为可选字段；如果提供，`mechanicTags` 必须使用小写短横线标签，`parTimeMs` 至少为 1000。
 
 ## 最小关卡示例
 
@@ -413,6 +458,14 @@ JSON Schema 只能检查结构，加载器还必须检查：
   "schemaVersion": 1,
   "id": "level-001",
   "name": "基础配合",
+  "metadata": {
+    "title": "Relay Gate",
+    "difficulty": 1,
+    "introText": "Hold one pressure plate open, let your teammate cross, then trade roles.",
+    "hintText": "If the gate closes, keep one player on the nearest plate.",
+    "mechanicTags": ["pressure", "door", "relay"],
+    "parTimeMs": 45000
+  },
   "world": {
     "width": 1280,
     "height": 720,

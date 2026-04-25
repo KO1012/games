@@ -1,152 +1,45 @@
 {
   "schemaVersion": 1,
   "id": "level-005",
-  "name": "Moving Platform Ferry",
-  "world": {
-    "width": 1280,
-    "height": 720,
-    "gravity": 1800,
-    "background": "platformer"
+  "name": "Delayed Gate",
+  "metadata": {
+    "title": "Delayed Gate",
+    "difficulty": 3,
+    "introText": "The plate is wired to a slow relay: the gate opens about a second after you step on, and closes a second after you leave.",
+    "hintText": "Hold the plate while your partner crosses, then leave and chase before the gate seals.",
+    "mechanicTags": ["pressure", "delay", "door", "relay"],
+    "parTimeMs": 55000
   },
+  "world": { "width": 1280, "height": 720, "gravity": 1800, "background": "platformer" },
   "players": [
-    {
-      "playerIndex": 0,
-      "x": 80,
-      "y": 608,
-      "facing": 1
-    },
-    {
-      "playerIndex": 1,
-      "x": 140,
-      "y": 608,
-      "facing": 1
-    }
+    { "playerIndex": 0, "x": 80, "y": 608, "facing": 1 },
+    { "playerIndex": 1, "x": 140, "y": 608, "facing": 1 }
   ],
   "platforms": [
-    {
-      "id": "wall-left",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "wall-right",
-      "type": "solid",
-      "rect": {
-        "x": 1256,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "floor-left",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 656,
-        "w": 480,
-        "h": 64
-      }
-    },
-    {
-      "id": "floor-right",
-      "type": "solid",
-      "rect": {
-        "x": 900,
-        "y": 656,
-        "w": 380,
-        "h": 64
-      }
-    },
-    {
-      "id": "ferry-a",
-      "type": "moving",
-      "rect": {
-        "x": 500,
-        "y": 560,
-        "w": 120,
-        "h": 24
-      },
-      "path": [
-        {
-          "x": 500,
-          "y": 560
-        },
-        {
-          "x": 760,
-          "y": 560
-        }
-      ],
-      "speed": 95,
-      "activeByDefault": false
-    }
+    { "id": "wall-left", "type": "solid", "rect": { "x": 0, "y": 0, "w": 24, "h": 720 } },
+    { "id": "wall-right", "type": "solid", "rect": { "x": 1256, "y": 0, "w": 24, "h": 720 } },
+    { "id": "floor-main", "type": "solid", "rect": { "x": 0, "y": 656, "w": 1280, "h": 64 } },
+    { "id": "ledge-low", "type": "oneWay", "rect": { "x": 360, "y": 560, "w": 160, "h": 24 } }
   ],
   "buttons": [
     {
-      "id": "button-left-ferry",
+      "id": "button-relay",
       "kind": "pressure",
       "mode": "hold",
-      "rect": {
-        "x": 250,
-        "y": 632,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "ferry-a",
-          "action": "start"
-        }
-      ]
-    },
-    {
-      "id": "button-right-ferry",
-      "kind": "pressure",
-      "mode": "hold",
-      "rect": {
-        "x": 960,
-        "y": 632,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "ferry-a",
-          "action": "start"
-        }
-      ]
+      "rect": { "x": 600, "y": 632, "w": 64, "h": 24 },
+      "targets": [{ "targetId": "door-relay", "action": "open", "delayMs": 1100 }]
     }
   ],
-  "doors": [],
-  "traps": [
+  "doors": [
     {
-      "id": "pit-spikes",
-      "type": "spike",
-      "rect": {
-        "x": 480,
-        "y": 656,
-        "w": 420,
-        "h": 40
-      },
-      "enabledByDefault": true
+      "id": "door-relay",
+      "rect": { "x": 760, "y": 360, "w": 40, "h": 296 },
+      "startsOpen": false,
+      "colorKey": "violet"
     }
   ],
+  "traps": [],
   "exits": [
-    {
-      "id": "exit-a",
-      "rect": {
-        "x": 1160,
-        "y": 560,
-        "w": 72,
-        "h": 96
-      },
-      "requiresBothPlayers": true,
-      "holdMs": 500
-    }
+    { "id": "exit-a", "rect": { "x": 1160, "y": 560, "w": 72, "h": 96 }, "requiresBothPlayers": true, "holdMs": 500 }
   ]
 }

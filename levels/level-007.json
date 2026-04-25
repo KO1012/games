@@ -1,171 +1,42 @@
 {
   "schemaVersion": 1,
   "id": "level-007",
-  "name": "Cross Gate Toggle",
-  "world": {
-    "width": 1280,
-    "height": 720,
-    "gravity": 1800,
-    "background": "platformer"
+  "name": "Crusher Corridor",
+  "metadata": {
+    "title": "Crusher Corridor",
+    "difficulty": 4,
+    "introText": "A heavy crusher slams between ceiling and floor. Slip past while it retracts.",
+    "hintText": "Wait at the safe wall until the crusher rises, then run together past it.",
+    "mechanicTags": ["crusher", "timing", "platforming"],
+    "parTimeMs": 65000
   },
+  "world": { "width": 1280, "height": 720, "gravity": 1800, "background": "platformer" },
   "players": [
-    {
-      "playerIndex": 0,
-      "x": 80,
-      "y": 608,
-      "facing": 1
-    },
-    {
-      "playerIndex": 1,
-      "x": 140,
-      "y": 608,
-      "facing": 1
-    }
+    { "playerIndex": 0, "x": 80, "y": 608, "facing": 1 },
+    { "playerIndex": 1, "x": 140, "y": 608, "facing": 1 }
   ],
   "platforms": [
+    { "id": "wall-left", "type": "solid", "rect": { "x": 0, "y": 0, "w": 24, "h": 720 } },
+    { "id": "wall-right", "type": "solid", "rect": { "x": 1256, "y": 0, "w": 24, "h": 720 } },
+    { "id": "floor-main", "type": "solid", "rect": { "x": 0, "y": 656, "w": 1280, "h": 64 } },
+    { "id": "ceiling-strip", "type": "solid", "rect": { "x": 380, "y": 96, "w": 520, "h": 64 } }
+  ],
+  "buttons": [],
+  "doors": [],
+  "traps": [
     {
-      "id": "wall-left",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "wall-right",
-      "type": "solid",
-      "rect": {
-        "x": 1256,
-        "y": 0,
-        "w": 24,
-        "h": 720
-      }
-    },
-    {
-      "id": "floor-main",
-      "type": "solid",
-      "rect": {
-        "x": 0,
-        "y": 656,
-        "w": 1280,
-        "h": 64
-      }
-    },
-    {
-      "id": "toggle-hop-a",
-      "type": "oneWay",
-      "rect": {
-        "x": 350,
-        "y": 560,
-        "w": 150,
-        "h": 24
-      }
-    },
-    {
-      "id": "toggle-hop-b",
-      "type": "oneWay",
-      "rect": {
-        "x": 650,
-        "y": 520,
-        "w": 150,
-        "h": 24
-      }
-    },
-    {
-      "id": "toggle-hop-c",
-      "type": "oneWay",
-      "rect": {
-        "x": 940,
-        "y": 560,
-        "w": 150,
-        "h": 24
-      }
+      "id": "crusher-mid",
+      "type": "crusher",
+      "rect": { "x": 600, "y": 160, "w": 80, "h": 80 },
+      "enabledByDefault": true,
+      "path": [
+        { "x": 600, "y": 160 },
+        { "x": 600, "y": 576 }
+      ],
+      "speed": 220
     }
   ],
-  "buttons": [
-    {
-      "id": "button-cross-left",
-      "kind": "pressure",
-      "mode": "hold",
-      "rect": {
-        "x": 260,
-        "y": 632,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "door-a",
-          "action": "close"
-        },
-        {
-          "targetId": "door-b",
-          "action": "open"
-        }
-      ]
-    },
-    {
-      "id": "button-cross-right",
-      "kind": "pressure",
-      "mode": "hold",
-      "rect": {
-        "x": 920,
-        "y": 632,
-        "w": 64,
-        "h": 24
-      },
-      "targets": [
-        {
-          "targetId": "door-a",
-          "action": "open"
-        },
-        {
-          "targetId": "door-b",
-          "action": "open"
-        }
-      ]
-    }
-  ],
-  "doors": [
-    {
-      "id": "door-a",
-      "rect": {
-        "x": 450,
-        "y": 360,
-        "w": 40,
-        "h": 296
-      },
-      "startsOpen": true,
-      "openDurationMs": 150,
-      "colorKey": "green"
-    },
-    {
-      "id": "door-b",
-      "rect": {
-        "x": 740,
-        "y": 360,
-        "w": 40,
-        "h": 296
-      },
-      "startsOpen": false,
-      "openDurationMs": 150,
-      "colorKey": "purple"
-    }
-  ],
-  "traps": [],
   "exits": [
-    {
-      "id": "exit-a",
-      "rect": {
-        "x": 1160,
-        "y": 560,
-        "w": 72,
-        "h": 96
-      },
-      "requiresBothPlayers": true,
-      "holdMs": 500
-    }
+    { "id": "exit-a", "rect": { "x": 1160, "y": 560, "w": 72, "h": 96 }, "requiresBothPlayers": true, "holdMs": 500 }
   ]
 }

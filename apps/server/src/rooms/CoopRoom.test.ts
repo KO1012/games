@@ -1,4 +1,11 @@
-import { PROTOCOL_VERSION, ROOM_PHASES, type RoomStateMessage } from "@coop-game/shared";
+import {
+  PROTOCOL_VERSION,
+  ROOM_PHASES,
+  type ButtonStateSnapshot,
+  type DoorStateSnapshot,
+  type LevelSchema,
+  type RoomStateMessage,
+} from "@coop-game/shared";
 import { describe, expect, it } from "vitest";
 
 import { CoopRoom } from "./CoopRoom.js";
@@ -173,6 +180,44 @@ describe("CoopRoom", () => {
     expect(snapshot.players.A?.ready).toBe(true);
     expect(snapshot.players.B?.ready).toBe(true);
     expect(harness.broadcasts.some((message) => message.type === "level_start")).toBe(true);
+  });
+
+  it("lets player A select a level before ready check starts", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+
+    await join(harness.room, firstClient, "Alice");
+
+    const levelStartsBeforeSelect = harness.broadcasts.filter((message) => message.type === "level_start").length;
+
+    await harness.receive("select_level", firstClient, { type: "select_level", levelIndex: 4 });
+
+    const snapshot = harness.getSnapshot();
+    const levelStartsAfterSelect = harness.broadcasts.filter((message) => message.type === "level_start").length;
+
+    expect(snapshot.phase).toBe(ROOM_PHASES.waiting);
+    expect(snapshot.levelIndex).toBe(4);
+    expect(snapshot.levelId).toBe("level-005");
+    expect(snapshot.players.A?.ready).toBe(false);
+    expect(snapshot.restartVotes).toEqual({});
+    expect(levelStartsAfterSelect).toBe(levelStartsBeforeSelect + 1);
+  });
+
+  it("ignores level selection from player B", async () => {
+    const harness = await createHarness();
+    const firstClient = createClient("session-a");
+    const secondClient = createClient("session-b");
+
+    await join(harness.room, firstClient, "Alice");
+    await join(harness.room, secondClient, "Bob");
+
+    await harness.receive("select_level", secondClient, { type: "select_level", levelIndex: 4 });
+
+    const snapshot = harness.getSnapshot();
+
+    expect(snapshot.phase).toBe(ROOM_PHASES.readyCheck);
+    expect(snapshot.levelIndex).toBe(0);
+    expect(snapshot.levelId).toBe("level-001");
   });
 
   it("keeps a dropped player seat during the reconnect window", async () => {
@@ -591,6 +636,280 @@ describe("CoopRoom", () => {
     expect(afterSecondStep?.lastProcessedInputSeq).toBe(1);
   });
 });
+
+describe("CoopRoom toggle and delayed targets", () => {
+  it("flips the toggle latch on each press-edge inside the button", () => {
+    const room = new CoopRoom();
+    const level = createToggleDoorLevel();
+    const player = makeOverlapPlayer({ x: 1000, y: 608 });
+    const internals = installLevelRuntime(room, level, [player]);
+    const buttonRect = level.buttons[0].rect;
+    const overlapX = buttonRect.x + 4;
+    const farX = level.world.width - 80;
+
+    // Initial state: door closed, latch off.
+    internals.update(1000);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(false);
+
+    // First press-edge: latch on, door opens.
+    player.x = overlapX;
+    internals.update(1100);
+    expect(internals.snapshotButton("button-toggle")?.active).toBe(true);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(true);
+
+    // Stay overlapping: latch is sticky, no flip.
+    internals.update(1300);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(true);
+
+    // Step off and wait past cooldown.
+    player.x = farX;
+    internals.update(1600);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(true);
+
+    // Second press-edge: latch off, door closes.
+    player.x = overlapX;
+    internals.update(1700);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(false);
+  });
+
+  it("ignores rapid re-presses inside the cooldown window", () => {
+    const room = new CoopRoom();
+    const level = createToggleDoorLevel();
+    const player = makeOverlapPlayer({ x: 1000, y: 608 });
+    const internals = installLevelRuntime(room, level, [player]);
+    const buttonRect = level.buttons[0].rect;
+    const overlapX = buttonRect.x + 4;
+    const farX = level.world.width - 80;
+
+    player.x = overlapX;
+    internals.update(2000); // first edge -> latched true
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(true);
+
+    player.x = farX;
+    internals.update(2030); // step off well within cooldown
+    player.x = overlapX;
+    internals.update(2050); // second edge during cooldown should be ignored
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(true);
+
+    // After cooldown clears, the next press-edge flips it off.
+    player.x = farX;
+    internals.update(2400);
+    player.x = overlapX;
+    internals.update(2450);
+    expect(internals.snapshotDoor("door-toggle")?.open).toBe(false);
+  });
+
+  it("delays target activation by delayMs and cancels stale flips", () => {
+    const room = new CoopRoom();
+    const level = createDelayedDoorLevel();
+    const player = makeOverlapPlayer({ x: 1000, y: 608 });
+    const internals = installLevelRuntime(room, level, [player]);
+    const buttonRect = level.buttons[0].rect;
+    const overlapX = buttonRect.x + 4;
+    const farX = level.world.width - 80;
+
+    // Player on plate at t=1000. Door must NOT open until 1000 + delay.
+    player.x = overlapX;
+    internals.update(1000);
+    expect(internals.snapshotButton("button-delay")?.active).toBe(true);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(false);
+
+    // Halfway through the delay still closed.
+    internals.update(1400);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(false);
+
+    // After delay elapsed, door opens.
+    internals.update(1850);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(true);
+
+    // Step off: door should stay open until release-delay completes.
+    player.x = farX;
+    internals.update(1900);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(true);
+
+    internals.update(2750);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(false);
+
+    // Quick tap shorter than delay must NOT trigger the door at all.
+    player.x = overlapX;
+    internals.update(3000);
+    player.x = farX;
+    internals.update(3100);
+    internals.update(4000);
+    expect(internals.snapshotDoor("door-delay")?.open).toBe(false);
+  });
+
+  it("resets toggle latch and pending delays when the level changes", async () => {
+    const harness = await createHarness();
+    const room = harness.room as unknown as RuntimeAccess;
+
+    const togglerLevel = createToggleDoorLevel();
+    const delayedLevel = createDelayedDoorLevel();
+    const player = makeOverlapPlayer({ x: togglerLevel.buttons[0].rect.x + 4, y: 608 });
+
+    installLevelRuntime(harness.room, togglerLevel, [player]);
+    room.updateLevelMechanics(5000);
+    expect(room.doors["door-toggle"]?.open).toBe(true);
+
+    // Switch level. The runtime maps must be cleared so the new toggle starts off.
+    room.initializeLevel(0);
+    installLevelRuntime(harness.room, delayedLevel, [player]);
+    room.updateLevelMechanics(6000);
+    expect(room.doors["door-delay"]?.open).toBe(false);
+  });
+});
+
+type RuntimeAccess = {
+  currentLevel: LevelSchema | null;
+  doors: Record<string, DoorStateSnapshot>;
+  buttons: Record<string, ButtonStateSnapshot>;
+  playersBySessionId: Map<string, unknown>;
+  phase: string;
+  buttonRuntime: Map<string, unknown>;
+  targetRuntime: Map<string, unknown>;
+  movingRuntime: Map<string, unknown>;
+  trapRuntime: Map<string, unknown>;
+  updateLevelMechanics: (now: number) => void;
+  initializeLevel: (levelIndex: number) => void;
+};
+
+type ToggleHarness = {
+  update: (now: number) => void;
+  snapshotButton: (id: string) => ButtonStateSnapshot | undefined;
+  snapshotDoor: (id: string) => DoorStateSnapshot | undefined;
+};
+
+type RuntimePlayerOverlap = {
+  sessionId: string;
+  role: string;
+  connected: boolean;
+  alive: boolean;
+  x: number;
+  y: number;
+  interactQueued: boolean;
+  interactQueuedUntil: number;
+};
+
+function makeOverlapPlayer(overrides: Partial<RuntimePlayerOverlap> = {}): RuntimePlayerOverlap {
+  return {
+    sessionId: "session-toggle",
+    role: "A",
+    connected: true,
+    alive: true,
+    x: 100,
+    y: 608,
+    interactQueued: false,
+    interactQueuedUntil: 0,
+    ...overrides,
+  };
+}
+
+function installLevelRuntime(
+  room: CoopRoom,
+  level: LevelSchema,
+  players: RuntimePlayerOverlap[],
+): ToggleHarness {
+  const internals = room as unknown as RuntimeAccess;
+
+  internals.currentLevel = level;
+  internals.phase = ROOM_PHASES.playing;
+  internals.buttonRuntime.clear();
+  internals.targetRuntime.clear();
+  internals.movingRuntime.clear();
+  internals.trapRuntime.clear();
+  internals.playersBySessionId.clear();
+
+  for (const player of players) {
+    internals.playersBySessionId.set(player.sessionId, player);
+  }
+
+  return {
+    update: (now) => {
+      internals.updateLevelMechanics(now);
+    },
+    snapshotButton: (id) => internals.buttons[id],
+    snapshotDoor: (id) => internals.doors[id],
+  };
+}
+
+function createToggleDoorLevel(): LevelSchema {
+  return {
+    schemaVersion: 1,
+    id: "level-999",
+    name: "Toggle Door",
+    world: { width: 1280, height: 720, gravity: 1800, background: "test" },
+    players: [
+      { playerIndex: 0, x: 80, y: 608, facing: 1 },
+      { playerIndex: 1, x: 140, y: 608, facing: 1 },
+    ],
+    platforms: [{ id: "floor", type: "solid", rect: { x: 0, y: 656, w: 1280, h: 64 } }],
+    buttons: [
+      {
+        id: "button-toggle",
+        kind: "pressure",
+        mode: "toggle",
+        rect: { x: 600, y: 632, w: 64, h: 24 },
+        cooldownMs: 200,
+        targets: [{ targetId: "door-toggle", action: "open" }],
+      },
+    ],
+    doors: [
+      {
+        id: "door-toggle",
+        rect: { x: 900, y: 360, w: 40, h: 296 },
+        startsOpen: false,
+      },
+    ],
+    traps: [],
+    exits: [
+      {
+        id: "exit-a",
+        rect: { x: 1160, y: 560, w: 72, h: 96 },
+        requiresBothPlayers: true,
+        holdMs: 500,
+      },
+    ],
+  };
+}
+
+function createDelayedDoorLevel(): LevelSchema {
+  return {
+    schemaVersion: 1,
+    id: "level-998",
+    name: "Delayed Door",
+    world: { width: 1280, height: 720, gravity: 1800, background: "test" },
+    players: [
+      { playerIndex: 0, x: 80, y: 608, facing: 1 },
+      { playerIndex: 1, x: 140, y: 608, facing: 1 },
+    ],
+    platforms: [{ id: "floor", type: "solid", rect: { x: 0, y: 656, w: 1280, h: 64 } }],
+    buttons: [
+      {
+        id: "button-delay",
+        kind: "pressure",
+        mode: "hold",
+        rect: { x: 600, y: 632, w: 64, h: 24 },
+        targets: [{ targetId: "door-delay", action: "open", delayMs: 800 }],
+      },
+    ],
+    doors: [
+      {
+        id: "door-delay",
+        rect: { x: 900, y: 360, w: 40, h: 296 },
+        startsOpen: false,
+      },
+    ],
+    traps: [],
+    exits: [
+      {
+        id: "exit-a",
+        rect: { x: 1160, y: 560, w: 72, h: 96 },
+        requiresBothPlayers: true,
+        holdMs: 500,
+      },
+    ],
+  };
+}
 
 async function createHarness(): Promise<Harness> {
   const room = new CoopRoom();

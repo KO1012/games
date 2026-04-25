@@ -149,6 +149,26 @@ created
 - 两名玩家都同意后重置当前关卡。
 - 玩家离开房间时清空投票。
 
+### `select_level`
+
+房主选择要进入的关卡。
+
+```json
+{
+  "type": "select_level",
+  "levelIndex": 9
+}
+```
+
+规则：
+
+- 仅 `role = "A"` 的玩家可发送。
+- `levelIndex` 从 `0` 开始，对应关卡列表顺序。
+- 服务端忽略越界或当前不存在的关卡。
+- 切换关卡会重置所有玩家 ready、重开投票、出生点和机关状态。
+- 切换后根据在线人数回到 `waiting` 或 `readyCheck`，再由双方 ready 进入 `playing`。
+- `loadingLevel` 阶段忽略该消息。
+
 ### `ping`
 
 可选调试消息。Colyseus 自带延迟能力可用时优先使用内置能力。

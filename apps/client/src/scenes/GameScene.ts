@@ -19,10 +19,13 @@ import {
 } from "@coop-game/shared";
 import Phaser from "phaser";
 
+import { bindSfxScene } from "../audio/SfxManager.js";
 import * as Sound from "../audio/SoundManager.js";
+import { MusicManager, type MusicTrack } from "../audio/MusicManager.js";
 import { ParticleManager } from "../effects/ParticleManager.js";
 import { ScreenEffects } from "../effects/ScreenEffects.js";
 import { BackgroundRenderer } from "../rendering/BackgroundRenderer.js";
+import { PlayerAnimator } from "../rendering/PlayerAnimator.js";
 import { generateAllTextures } from "../rendering/TextureGenerator.js";
 import {
   BUTTON_ACTIVE,
@@ -43,6 +46,13 @@ const PIXEL_FONT = "'Press Start 2P', monospace";
 
 type MechanismView = Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite;
 type RectLike = { x: number; y: number; w: number; h: number };
+type PointLike = { x: number; y: number };
+type MechanismLinkView = {
+  buttonId: string;
+  targetId: string;
+  action: string;
+  graphics: Phaser.GameObjects.Graphics;
+};
 
 export type RenderDebugInfo = {
   cameraScrollX: number;
@@ -58,8 +68,12 @@ export type RenderDebugInfo = {
 
 export class GameScene extends Phaser.Scene {
   // -- Player views --
-  private playerViews!: Record<PlayerRole, Phaser.GameObjects.Image>;
+  private playerViews!: Record<PlayerRole, Phaser.GameObjects.Sprite>;
+  private playerAnimator!: PlayerAnimator;
   private roleLabels!: Record<PlayerRole, Phaser.GameObjects.Text>;
+  private localPlayerMarker!: Phaser.GameObjects.Triangle;
+  private teammateIndicator!: Phaser.GameObjects.Triangle;
+  private teammateIndicatorLabel!: Phaser.GameObjects.Text;
   private prevAlive: Partial<Record<PlayerRole, boolean>> = {};
   private prevGrounded: Partial<Record<PlayerRole, boolean>> = {};
 
@@ -67,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   private renderedLevelId: string | null = null;
   private levelObjects: Phaser.GameObjects.GameObject[] = [];
   private buttonViews: Record<string, Phaser.GameObjects.Rectangle> = {};
+  private mechanismLinks: MechanismLinkView[] = [];
   private doorViews: Record<string, Phaser.GameObjects.Rectangle> = {};
   private doorIndicators: Record<string, Phaser.GameObjects.Rectangle> = {};
   private doorFeedbackLabels: Record<string, Phaser.GameObjects.Text> = {};
@@ -79,12 +94,17 @@ export class GameScene extends Phaser.Scene {
   private bg!: BackgroundRenderer;
   private particles!: ParticleManager;
   private fx!: ScreenEffects;
+  private music!: MusicManager;
+  private currentMusicTrack: MusicTrack = null;
 
   // -- State tracking for audio triggers --
   private prevButtons: Record<string, boolean> = {};
   private prevDoors: Record<string, boolean> = {};
   private prevPhase: string = "";
   private cameraFollowRole: PlayerRole | null = null;
+  private levelIntroText!: Phaser.GameObjects.Text;
+  private levelHintText!: Phaser.GameObjects.Text;
+  private levelIntroVisibleUntil = 0;
 
   // -- External state ref (set from main.ts) --
   public gameState!: GameState;
@@ -101,7 +121,7 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.enabled = false;
     }
 
-    // Generate all pixel textures
+    // Generate all pixel textures (procedural fallback when external assets are missing)
     generateAllTextures(this);
 
     // Background
@@ -110,6 +130,14 @@ export class GameScene extends Phaser.Scene {
     // Subsystems
     this.particles = new ParticleManager(this);
     this.fx = new ScreenEffects(this);
+    this.playerAnimator = new PlayerAnimator(this);
+    this.playerAnimator.registerAnimations();
+    this.music = new MusicManager();
+    this.music.bind(this);
+    bindSfxScene(this);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.handleShutdown());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.handleShutdown());
 
     // Control hint
     this.add
@@ -121,16 +149,71 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(50);
 
-    // Player images
+    this.levelIntroText = this.add
+      .text(DEFAULT_CLIENT_WIDTH / 2, 72, "", {
+        color: "#f8fafc",
+        fontFamily: PIXEL_FONT,
+        fontSize: "11px",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(60)
+      .setVisible(false);
+
+    this.levelHintText = this.add
+      .text(DEFAULT_CLIENT_WIDTH / 2, 94, "", {
+        color: "#bfdbfe",
+        fontFamily: PIXEL_FONT,
+        fontSize: "7px",
+        align: "center",
+        wordWrap: { width: 620 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(60)
+      .setVisible(false);
+
+    // Player sprites – use external spritesheet when present, fallback to procedural texture
     this.playerViews = {
-      [PLAYER_ROLES.A]: this.add.image(0, 0, "player_a").setVisible(false).setDepth(10),
-      [PLAYER_ROLES.B]: this.add.image(0, 0, "player_b").setVisible(false).setDepth(10),
+      [PLAYER_ROLES.A]: this.add
+        .sprite(0, 0, this.playerAnimator.getTextureKey(PLAYER_ROLES.A))
+        .setVisible(false)
+        .setDepth(10),
+      [PLAYER_ROLES.B]: this.add
+        .sprite(0, 0, this.playerAnimator.getTextureKey(PLAYER_ROLES.B))
+        .setVisible(false)
+        .setDepth(10),
     };
 
     this.roleLabels = {
       [PLAYER_ROLES.A]: this.createRoleLabel(PLAYER_ROLES.A),
       [PLAYER_ROLES.B]: this.createRoleLabel(PLAYER_ROLES.B),
     };
+
+    this.localPlayerMarker = this.add
+      .triangle(0, 0, 0, 12, 8, 0, 16, 12, 0xf8fafc, 0.95)
+      .setOrigin(0.5)
+      .setDepth(12)
+      .setVisible(false);
+
+    this.teammateIndicator = this.add
+      .triangle(0, 0, 0, 14, 9, 0, 18, 14, 0xf97316, 0.95)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(70)
+      .setVisible(false);
+
+    this.teammateIndicatorLabel = this.add
+      .text(0, 0, "", {
+        color: "#f8fafc",
+        fontFamily: PIXEL_FONT,
+        fontSize: "7px",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(71)
+      .setVisible(false);
 
     // Initial fade in
     this.fx.fadeIn(800);
@@ -165,10 +248,13 @@ export class GameScene extends Phaser.Scene {
 
     // Sync mechanism views
     this.syncMechanismViews(state);
+    this.syncMechanismLinks(state, time);
     this.syncDoorBlockFeedback(state, time);
 
     // Sync players
     this.syncPlayers(state, time);
+    this.syncPlayerMarkers(state, time);
+    this.syncLevelIntro(time);
 
     // Phase-change audio
     if (state.phase !== this.prevPhase) {
@@ -179,6 +265,28 @@ export class GameScene extends Phaser.Scene {
       if (state.phase === ROOM_PHASES.finished) Sound.playGameComplete();
       this.prevPhase = state.phase;
     }
+
+    this.syncMusicTrack(state.phase);
+  }
+
+  private syncMusicTrack(phase: string): void {
+    let next: MusicTrack;
+    if (phase === ROOM_PHASES.playing || phase === ROOM_PHASES.loadingLevel) {
+      next = "level";
+    } else if (phase === ROOM_PHASES.levelComplete || phase === ROOM_PHASES.finished) {
+      next = "victory";
+    } else {
+      next = "menu";
+    }
+    if (next === this.currentMusicTrack) return;
+    this.currentMusicTrack = next;
+    this.music.play(next);
+  }
+
+  private handleShutdown(): void {
+    this.music?.destroy();
+    bindSfxScene(null);
+    this.currentMusicTrack = null;
   }
 
   public getRenderDebugInfo(role: PlayerRole | null): RenderDebugInfo {
@@ -237,10 +345,7 @@ export class GameScene extends Phaser.Scene {
       const cy = player.y + PLAYER_SIZE / 2;
       view.setPosition(cx, cy);
 
-      // Facing
-      view.setFlipX(player.facing === -1);
-
-      // State animations
+      // State animations (also handles facing flip)
       this.applyPlayerAnimation(view, player, role, time);
 
       // Label
@@ -276,59 +381,134 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyPlayerAnimation(
-    view: Phaser.GameObjects.Image,
+    view: Phaser.GameObjects.Sprite,
     player: PlayerSnapshot,
     role: PlayerRole,
     time: number,
   ): void {
-    if (!player.alive) {
-      // Dead – invisible with flicker
-      view.setAlpha(0.15);
-      view.setScale(1);
-      return;
-    }
-
     const isMe = role === this.myRole;
-    const baseAlpha = isMe ? 1 : 0.8;
-
-    if (!player.grounded) {
-      // Airborne – stretch/squash
-      if (player.vy < 0) {
-        // Rising
-        view.setScale(0.9, 1.12);
-      } else {
-        // Falling
-        view.setScale(1.1, 0.88);
-      }
-      view.setAlpha(baseAlpha);
-    } else if (Math.abs(player.vx) > 10) {
-      // Running – slight lean + bob
-      const bob = Math.sin(time * 0.012) * 1.5;
-      view.setScale(1);
-      view.y += bob;
-      view.setAlpha(baseAlpha);
-
-      // Running dust
-      if (Math.random() < 0.08) {
-        this.particles.emitDust(
-          player.x + PLAYER_SIZE / 2,
-          player.y + PLAYER_SIZE,
-        );
-      }
-    } else {
-      // Idle – gentle breathing
-      const breath = 1 + Math.sin(time * 0.003) * 0.02;
-      view.setScale(1, breath);
-      view.setAlpha(baseAlpha);
+    const result = this.playerAnimator.apply(view, player, role, isMe, time);
+    if (result.emitDust) {
+      this.particles.emitDust(player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE);
     }
   }
 
+  private syncPlayerMarkers(state: GameState, time: number): void {
+    this.syncLocalPlayerMarker(state, time);
+    this.syncTeammateIndicator(state);
+  }
+
+  private syncLocalPlayerMarker(state: GameState, time: number): void {
+    const localPlayer = this.myRole ? state.players[this.myRole] : null;
+
+    if (!this.myRole || !localPlayer?.connected || !localPlayer.alive) {
+      this.localPlayerMarker.setVisible(false);
+      return;
+    }
+
+    const color = this.getPlayerColor(this.myRole);
+    const pulse = 1 + Math.sin(time * 0.008) * 0.08;
+    this.localPlayerMarker
+      .setVisible(true)
+      .setPosition(localPlayer.x + PLAYER_SIZE / 2, localPlayer.y - 18)
+      .setScale(pulse)
+      .setFillStyle(color, 0.95);
+  }
+
+  private syncTeammateIndicator(state: GameState): void {
+    const teammateRole = this.getTeammateRole();
+    const teammate = teammateRole ? state.players[teammateRole] : null;
+
+    if (!teammateRole || !teammate?.connected || !teammate.alive) {
+      this.hideTeammateIndicator();
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const screenX = teammate.x + PLAYER_SIZE / 2 - camera.scrollX;
+    const screenY = teammate.y + PLAYER_SIZE / 2 - camera.scrollY;
+    const margin = 38;
+    const onScreen =
+      screenX >= margin &&
+      screenX <= camera.width - margin &&
+      screenY >= margin &&
+      screenY <= camera.height - margin;
+
+    if (onScreen) {
+      this.hideTeammateIndicator();
+      return;
+    }
+
+    const x = Phaser.Math.Clamp(screenX, margin, camera.width - margin);
+    const y = Phaser.Math.Clamp(screenY, margin, camera.height - margin);
+    const angle = Math.atan2(screenY - camera.height / 2, screenX - camera.width / 2);
+    const color = this.getPlayerColor(teammateRole);
+    const labelOffsetY = y < camera.height / 2 ? 18 : -18;
+
+    this.teammateIndicator
+      .setVisible(true)
+      .setPosition(x, y)
+      .setRotation(angle + Math.PI / 2)
+      .setFillStyle(color, 0.95);
+    this.teammateIndicatorLabel
+      .setVisible(true)
+      .setPosition(x, y + labelOffsetY)
+      .setText(teammateRole)
+      .setColor(`#${color.toString(16).padStart(6, "0")}`);
+  }
+
+  private hideTeammateIndicator(): void {
+    this.teammateIndicator.setVisible(false);
+    this.teammateIndicatorLabel.setVisible(false);
+  }
+
+  private getTeammateRole(): PlayerRole | null {
+    if (this.myRole === PLAYER_ROLES.A) return PLAYER_ROLES.B;
+    if (this.myRole === PLAYER_ROLES.B) return PLAYER_ROLES.A;
+    return null;
+  }
+
+  private getPlayerColor(role: PlayerRole): number {
+    return role === PLAYER_ROLES.A ? 0x38bdf8 : 0xfb923c;
+  }
+
   // ── Level rendering ──────────────────────────────────────────
+
+  private showLevelIntro(level: LevelSchema): void {
+    const metadata = level.metadata;
+    const title = metadata?.title ?? level.name;
+    const parTime = metadata ? ` · PAR ${Math.round(metadata.parTimeMs / 1000)}S` : "";
+    const difficulty = metadata ? `D${metadata.difficulty}` : level.id.toUpperCase();
+
+    this.levelIntroText.setText(`${difficulty} · ${title}${parTime}`);
+    this.levelHintText.setText(metadata?.introText ?? "");
+    this.levelIntroVisibleUntil = this.time.now + 8000;
+    this.levelIntroText.setVisible(true).setAlpha(1);
+    this.levelHintText.setVisible(Boolean(metadata?.introText)).setAlpha(1);
+  }
+
+  private syncLevelIntro(time: number): void {
+    if (time >= this.levelIntroVisibleUntil) {
+      this.hideLevelIntro();
+      return;
+    }
+
+    const alpha = Phaser.Math.Clamp((this.levelIntroVisibleUntil - time) / 1200, 0, 1);
+    this.levelIntroText.setAlpha(alpha);
+    this.levelHintText.setAlpha(alpha);
+  }
+
+  private hideLevelIntro(): void {
+    this.levelIntroText.setVisible(false).setAlpha(0);
+    this.levelHintText.setVisible(false).setAlpha(0);
+    this.levelIntroVisibleUntil = 0;
+  }
 
   private renderLevel(level: LevelSchema | null): void {
     for (const obj of this.levelObjects) obj.destroy();
     this.levelObjects = [];
     this.buttonViews = {};
+    this.mechanismLinks = [];
     this.doorViews = {};
     this.doorIndicators = {};
     this.doorFeedbackLabels = {};
@@ -340,7 +520,11 @@ export class GameScene extends Phaser.Scene {
     this.prevDoors = {};
     this.renderedLevelId = level?.id ?? null;
 
-    if (!level) return;
+    if (!level) {
+      this.hideLevelIntro();
+      return;
+    }
+    this.showLevelIntro(level);
 
     // World bounds background
     this.levelObjects.push(
@@ -411,6 +595,8 @@ export class GameScene extends Phaser.Scene {
         this.levelObjects.push(ts);
       }
     }
+
+    this.renderMechanismLinks(level);
 
     // Buttons
     for (const button of level.buttons) {
@@ -542,6 +728,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderMechanismLinks(level: LevelSchema): void {
+    for (const button of level.buttons) {
+      for (const target of button.targets) {
+        if (!this.getMechanismTargetCenter(level, target.targetId, this.gameState)) {
+          continue;
+        }
+
+        const graphics = this.add.graphics().setDepth(1.6);
+        this.mechanismLinks.push({
+          buttonId: button.id,
+          targetId: target.targetId,
+          action: target.action,
+          graphics,
+        });
+        this.levelObjects.push(graphics);
+      }
+    }
+  }
+
   // ── Mechanism sync ───────────────────────────────────────────
 
   private syncMechanismViews(state: GameState): void {
@@ -608,6 +813,131 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private syncMechanismLinks(state: GameState, time: number): void {
+    if (!state.level) return;
+
+    for (const link of this.mechanismLinks) {
+      const button = state.level.buttons.find((candidate) => candidate.id === link.buttonId);
+      const targetCenter = this.getMechanismTargetCenter(state.level, link.targetId, state);
+
+      if (!button || !targetCenter) {
+        link.graphics.clear();
+        continue;
+      }
+
+      const sourceCenter = this.getRectCenter(button.rect);
+      const active = state.buttons[link.buttonId]?.active ?? false;
+      const color = this.getMechanismLinkColor(state.level, link.targetId, link.action);
+      this.drawMechanismLink(link.graphics, sourceCenter, targetCenter, color, active, time);
+    }
+  }
+
+  private drawMechanismLink(
+    graphics: Phaser.GameObjects.Graphics,
+    source: PointLike,
+    target: PointLike,
+    color: number,
+    active: boolean,
+    time: number,
+  ): void {
+    graphics.clear();
+
+    if (active) {
+      graphics.lineStyle(3, color, 0.9);
+      graphics.beginPath();
+      graphics.moveTo(source.x, source.y);
+      graphics.lineTo(target.x, target.y);
+      graphics.strokePath();
+
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const dotCount = Math.max(2, Math.floor(length / 48));
+      graphics.fillStyle(color, 0.95);
+
+      for (let i = 0; i < dotCount; i += 1) {
+        const t = (time * 0.0016 + i / dotCount) % 1;
+        graphics.fillRect(source.x + dx * t - 3, source.y + dy * t - 3, 6, 6);
+      }
+      return;
+    }
+
+    graphics.lineStyle(2, 0x64748b, 0.32);
+    this.drawDashedLine(graphics, source, target, 12, 8);
+  }
+
+  private drawDashedLine(
+    graphics: Phaser.GameObjects.Graphics,
+    source: PointLike,
+    target: PointLike,
+    dashLength: number,
+    gapLength: number,
+  ): void {
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const step = dashLength + gapLength;
+
+    for (let start = 0; start < length; start += step) {
+      const end = Math.min(start + dashLength, length);
+      const startRatio = start / length;
+      const endRatio = end / length;
+      graphics.beginPath();
+      graphics.moveTo(source.x + dx * startRatio, source.y + dy * startRatio);
+      graphics.lineTo(source.x + dx * endRatio, source.y + dy * endRatio);
+      graphics.strokePath();
+    }
+  }
+
+  private getMechanismTargetCenter(level: LevelSchema, targetId: string, state: GameState | null): PointLike | null {
+    const door = level.doors.find((candidate) => candidate.id === targetId);
+    if (door) return this.getRectCenter(door.rect);
+
+    const trap = level.traps.find((candidate) => candidate.id === targetId);
+    if (trap) {
+      const trapState = state?.traps[targetId];
+      return this.getRectCenter({
+        ...trap.rect,
+        x: trapState?.x ?? trap.rect.x,
+        y: trapState?.y ?? trap.rect.y,
+      });
+    }
+
+    const platform = level.platforms.find((candidate) => candidate.id === targetId && candidate.type === "moving");
+    if (platform) {
+      const platformState = state?.movingPlatforms[targetId];
+      return this.getRectCenter({
+        ...platform.rect,
+        x: platformState?.x ?? platform.rect.x,
+        y: platformState?.y ?? platform.rect.y,
+      });
+    }
+
+    return null;
+  }
+
+  private getMechanismLinkColor(level: LevelSchema, targetId: string, action: string): number {
+    const door = level.doors.find((candidate) => candidate.id === targetId);
+    if (door) return getDoorColor(door.colorKey);
+
+    const trap = level.traps.find((candidate) => candidate.id === targetId);
+    if (trap?.type === "laser") return LASER_CORE;
+    if (trap?.type === "crusher") return 0xf97316;
+    if (trap?.type === "spike") return 0xf43f5e;
+
+    const platform = level.platforms.find((candidate) => candidate.id === targetId && candidate.type === "moving");
+    if (platform) return PLATFORM_MOVING;
+
+    return action === "close" || action === "disable" || action === "stop" ? 0xf97316 : 0x22c55e;
+  }
+
+  private getRectCenter(rect: RectLike): PointLike {
+    return {
+      x: rect.x + rect.w / 2,
+      y: rect.y + rect.h / 2,
+    };
+  }
+
   // ── Input ────────────────────────────────────────────────────
 
   private createRoleLabel(role: PlayerRole): Phaser.GameObjects.Text {
@@ -622,7 +952,7 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
   }
 
-  private syncCameraFollow(role: PlayerRole, view: Phaser.GameObjects.Image): void {
+  private syncCameraFollow(role: PlayerRole, view: Phaser.GameObjects.Sprite): void {
     const camera = this.cameras.main;
     const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })._follow;
 

@@ -664,3 +664,303 @@
   - `git diff --check -- AGENTS.md DEV_LOG.md`：通过。
 - 风险：
   - 未运行项目 typecheck/lint/test/build；本次仅整理文档。
+
+## 2026-04-25 19:39:10 +08:00
+
+- 任务：参考可玩性建议，优先增强关卡信息表达和双人可读性，不新增复杂玩法。
+- 改动：
+  - 扩展关卡 schema，新增可选 `metadata`，包含 `title`、`difficulty`、`introText`、`hintText`、`mechanicTags`、`parTimeMs`。
+  - 为 10 个正式关卡和输入调试关卡补充 metadata，客户端 HUD 使用关卡标题展示当前关卡。
+  - `GameScene` 新增关卡开场提示、按钮到目标的可视化连线，连线会随按钮激活状态高亮流动。
+  - `GameScene` 新增本地玩家头顶箭头和队友离屏方向指示器。
+  - 更新 `LEVEL_SCHEMA.md` 和 shared schema 测试，覆盖 metadata 校验。
+  - `#level-label` 增加宽度约束，避免较长关卡标题挤出 HUD。
+- 文件：
+  - `LEVEL_SCHEMA.md`
+  - `apps/client/src/main.ts`
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/styles.css`
+  - `levels/level-001.json`
+  - `levels/level-002.json`
+  - `levels/level-003.json`
+  - `levels/level-004.json`
+  - `levels/level-005.json`
+  - `levels/level-006.json`
+  - `levels/level-007.json`
+  - `levels/level-008.json`
+  - `levels/level-009.json`
+  - `levels/level-010.json`
+  - `levels/level-debug-input.json`
+  - `packages/shared/src/level.ts`
+  - `packages/shared/src/level.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 9 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 27 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - HTTP smoke check：`http://127.0.0.1:5173/` 返回 200，`http://127.0.0.1:2567/` 返回 200。
+- 风险：
+  - 未做真实双浏览器从 Level 1 到 Level 10 的完整手工通关；本次主要解决可读性和 schema 表达。
+  - 未做截图级视觉验收；需要手测确认连线、队友离屏指示器和关卡提示在各关不遮挡关键区域。
+
+## 2026-04-25 19:51:51 +08:00
+
+- 任务：修复 Level 10 右侧相邻按钮踩上去不会触发的问题。
+- 改动：
+  - 将 `level-010` 的 `button-door-left` 从 `interact` 改为 `pressure`，踩上去即可打开 `door-final` 并关闭 `laser-final`。
+  - 移除该按钮的交互持续时间和冷却配置，避免视觉上是地面压力板但逻辑需要按 `E`。
+  - 更新 Level 10 metadata 文案和标签，把最终门控制描述为压力板配合。
+  - 新增 shared 回归测试，锁定 Level 10 最终门两侧地面控制块都必须是压力按钮。
+- 文件：
+  - `levels/level-010.json`
+  - `packages/shared/src/level.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 10 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 27 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+- 风险：
+  - 未做浏览器内手动踩按钮验证；按配置和测试，客户端会显示为 `▼` 压力板，服务端会按踩踏触发。
+
+## 2026-04-25 19:57:34 +08:00
+
+- 任务：提升前 10 关的变化和难度，避免后续关卡只是简单按钮门重复。
+- 改动：
+  - 保留 Level 1-2 作为基础教学，重做 Level 3-10 的关卡布局、机制组合和 metadata。
+  - Level 3 改为上下分路互开门；Level 4 改为双激光接力；Level 5 改为三点 ferry 尖刺坑。
+  - Level 6 加入上下路线、双门和下路激光；Level 7 改为限时门 + 双尖刺跳跃；Level 8 改为自动移动平台 + 错相激光。
+  - Level 9 改为双压机控制爬升；Level 10 改为双 ferry、中继按钮、压机、激光和最终门控综合关。
+  - 更新 `LEVEL_NOTES.md`，同步每关设计意图和通关方式。
+  - 新增 shared 回归测试，确保后半段关卡保留移动平台、限时按钮、激光、压机和尖刺等机制多样性。
+- 文件：
+  - `levels/level-003.json`
+  - `levels/level-004.json`
+  - `levels/level-005.json`
+  - `levels/level-006.json`
+  - `levels/level-007.json`
+  - `levels/level-008.json`
+  - `levels/level-009.json`
+  - `levels/level-010.json`
+  - `LEVEL_NOTES.md`
+  - `packages/shared/src/level.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 11 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 27 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - Node REPL 关卡摘要检查：Level 3-10 已覆盖分路门控、双激光、移动平台、定时门、尖刺、压机和最终综合关。
+- 风险：
+  - 未做真实双人手工通关；新关卡比旧版复杂，可能需要根据实际手感微调跳距、按钮位置和压机/平台速度。
+
+## 2026-04-25 20:02:24 +08:00
+
+- 任务：修复 Level 3 蓝门/橙门开门顺序死锁，导致截图位置无法通过的问题。
+- 改动：
+  - 将 `level-003` 左下 `button-floor-left` 的目标从 `door-upper` 改为 `door-floor`，先打开挡路蓝门。
+  - 将中层 `button-upper-mid` 的目标从 `door-floor` 改为 `door-upper`，玩家到达中层后再打开橙门。
+  - 更新 Level 3 metadata 文案和 `LEVEL_NOTES.md`，说明正确接力顺序。
+  - 新增 shared 回归测试，锁定 Level 3 初始可达按钮必须先打开 `door-floor`。
+- 文件：
+  - `levels/level-003.json`
+  - `LEVEL_NOTES.md`
+  - `packages/shared/src/level.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 12 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 27 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+- 风险：
+  - 未做浏览器内双人手工验证；本次修复了关卡配置死锁，但跳距和节奏仍建议实测微调。
+
+## 2026-04-25 20:10:16 +08:00
+
+- 任务：
+  - 增加玩家可自行选择关卡的功能。
+- 改动：
+  - 新增客户端 `select_level` 协议消息，文档说明房主选关、越界忽略、切关重置 ready/投票/出生点/机关状态。
+  - 服务端新增 `select_level` 处理逻辑：仅玩家 A 可切换关卡，`loadingLevel` 阶段忽略，切换后广播 `level_start` 和 `room_state`。
+  - 客户端控制面板新增 Level 下拉框，玩家 A 可在房间内选择 1-10 关，其他玩家只读。
+  - 增加服务端测试，覆盖玩家 A 选关成功和玩家 B 选关被忽略。
+- 文件：
+  - `NETWORK_SPEC.md`
+  - `packages/shared/src/protocol.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `apps/client/index.html`
+  - `apps/client/src/main.ts`
+  - `apps/client/src/styles.css`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过，shared 12 个测试、client 9 个测试、server 29 个测试通过。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+- 风险：
+  - 未做双浏览器真实联调；选关 UI 和切关后的 ready 流程仍需在两个浏览器里手动确认。
+
+## 2026-04-25 20:31:56 +08:00
+
+- 任务：修复部分关卡不需要合作、单人可直接绕过机关到达出口的问题。
+- 改动：
+  - Level 5 删除可直接跳过尖刺坑的孤岛跳台，将两段尖刺坑改为需要队友持续压板关闭的高位危险区，压力板同时启动 ferry。
+  - Level 7 将中门改为贯通高度，避免从上方跳台直接越过限时门。
+  - Level 8 改为 Ferry Laser Relay：ferry 默认停止，压力板启动 ferry 并关闭对应全高激光，取消自动激光窗口。
+  - 更新 `LEVEL_NOTES.md` 说明新的配合路径，并新增 shared 回归测试锁定这些绕行修复点。
+- 文件：
+  - `levels/level-005.json`
+  - `levels/level-007.json`
+  - `levels/level-008.json`
+  - `LEVEL_NOTES.md`
+  - `packages/shared/src/level.test.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - Node REPL 单人可达性扫描：修改前 Level 5/7/8 可在不触发合作机关时到达出口；修改后 Level 1-10 均不可达。
+  - `corepack pnpm exec prettier --check levels/level-005.json levels/level-007.json levels/level-008.json LEVEL_NOTES.md packages/shared/src/level.test.ts DEV_LOG.md`：发现 4 个文件格式问题；已对对应文件运行 `prettier --write` 修复。
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 2 个测试文件 13 个测试，client 1 个测试文件 9 个测试，server 2 个测试文件 29 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - `git diff --check`：通过；仅有 Git 对 LF/CRLF 的工作区提示。
+- 风险：
+  - 未做双浏览器真实通关；本次用物理参数扫描和配置回归测试确认绕行已封堵，仍建议手测 Level 5/7/8 的跳距和节奏。
+
+## 2026-04-26 00:32:42 +08:00
+
+- 任务：扩展按钮系统并重做 10 关。新增 `mode: "toggle"` 与目标动作 `delayMs`，按其重新设计 level-001 ~ level-010，使每关聚焦一个新机制，最后一关综合。
+- 改动：
+  - shared 增加 `ButtonMode = "hold" | "toggle"`，schema 校验放行 toggle，错误信息更新为 `hold or toggle`；`resolveHoldButtonDoorState` 添加注释强调静态预览只覆盖 hold。
+  - 服务器在 `CoopRoom` 增加 toggle latch（press-edge + cooldown）和按目标 key 的 `targetRuntime` 实现 `delayMs` 双向延迟（含取消未生效翻转）。`initializeLevel` 同步清空 `targetRuntime`。
+  - 重写 `levels/level-001.json` ~ `levels/level-010.json` 为新教学路径：Press & Cross / Latched Gate / Timed Sprint / Interact Lift / Delayed Gate / Strobe Lasers / Crusher Corridor / Conveyor Outpost / Cipher Doors / Last Stand。
+  - shared/level.test.ts 改为按机制覆盖断言，新增 toggle/delayMs 接受性测试与未知 mode 拒绝测试；apps/server/src/rooms/CoopRoom.test.ts 新增 4 个 toggle/delayMs 行为测试。
+  - GAME_DESIGN.md 更新按钮 kind/mode 段落与 10 关规划；LEVEL_NOTES.md 替换全部关卡说明；LEVEL_SCHEMA.md 把 `button.mode` 枚举更新为 `["hold", "toggle"]`。
+- 文件：
+  - `packages/shared/src/level.ts`
+  - `packages/shared/src/level.test.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/server/src/rooms/CoopRoom.test.ts`
+  - `levels/level-001.json` ~ `levels/level-010.json`
+  - `GAME_DESIGN.md`
+  - `LEVEL_NOTES.md`
+  - `LEVEL_SCHEMA.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm --filter @coop-game/shared run build`：通过（重建 dist 以提供新的 toggle/ButtonMode 类型）。
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 12，server 33（含 4 个新增 toggle/delay 测试），client 9。
+  - `corepack pnpm run build`：通过；client 仍提示 chunk > 500 kB。
+- 风险：
+  - 未做双客户端联机回归，关卡空间布局只通过参数化校验和单测确认；建议手动跑一遍 Level 1-10 确认尺寸与跳跃可达性。
+  - delayMs 取消语义为：延迟期内目标条件回到原状即取消未生效翻转；这与两次脉冲都生效的硬件继电器不同，关卡设计应以此为准。
+
+## 2026-04-26 01:08:26 +08:00
+
+- 任务：升级客户端画面与音乐。引入可选的 CC0 外部精灵图与音频资源系统，新增多层 parallax 背景、玩家动画状态机、独立 MusicManager（外部 OGG + 程序化 chiptune 兜底）、SfxManager 与音量持久化 UI；服务端、协议、关卡未受影响。
+- 改动：
+  - 资源系统：新增 `apps/client/public/assets/`（含 `CREDITS.md`、空子目录占位）与 `apps/client/scripts/download-assets.mjs`；新增 `apps/client/src/assets/manifest.ts`、`apps/client/src/assets/AssetRegistry.ts`、`apps/client/src/scenes/PreloadScene.ts`；通过 Phaser loader 事件给每个 key 标记 present/missing，下游系统按此选择走外部资源还是程序化兜底。
+  - 玩家动画：新增 `apps/client/src/rendering/PlayerAnimator.ts` 含纯函数 `selectPlayerAnimState`、`registerAnimations`、`apply`，处理 Kenney "Pixel Platformer" 24×24 帧的 idle/run/jump/fall/death 与 squash/stretch、breath、bob、dust。`apps/client/src/rendering/PlayerAnimator.test.ts` 新增 6 个状态选择单元测试。
+  - 背景：重写 `apps/client/src/rendering/BackgroundRenderer.ts` 为 5 层（sky gradient → 远景山脊或外部图 → 中景脊线或外部图 → 星点 → 漂移雾带）多 parallax 因子，外部图与程序化兜底自动切换。
+  - 音频：新增 `apps/client/src/audio/preferences.ts`（musicVolume/sfxVolume/muted + localStorage 持久化 + listener）、`apps/client/src/audio/SfxManager.ts`（外部 OGG 优先 → Web Audio 合成兜底，受 effectiveSfxVolume 控制）、`apps/client/src/audio/MusicManager.ts`（外部循环 OGG 优先；缺失时启动内置三段 chiptune 步进音序器：menu/level/victory，BPM 与音色独立配置）。`apps/client/src/audio/SoundManager.ts` 改为向后兼容 facade 重导出 SfxManager。
+  - 接入：`apps/client/src/scenes/GameScene.ts` 改用 PlayerAnimator、绑定 SfxManager 场景、按 phase 切换 MusicManager 曲目（playing/loadingLevel→level，levelComplete/finished→victory，其它→menu），并在场景 SHUTDOWN/DESTROY 释放音乐。`apps/client/src/main.ts` 注册 PreloadScene 在 GameScene 之前，新增 `setupVolumeControls()` 接入 HTML 音量面板。`apps/client/index.html` 新增 `#audio-controls` 浮层（toggle/music/sfx/mute）；`apps/client/src/styles.css` 新增 `.audio-controls`、`.volume-panel` 样式。
+  - 工程：`eslint.config.js` 新增 `apps/client/scripts/**/*.mjs` 启用 node 全局，避免下载脚本因 console/process 报错。`README.md` 新增「美术与音频资源」段，记录 fallback 策略、下载脚本、音量 UI、CREDITS 路径。
+- 文件：
+  - `apps/client/public/assets/CREDITS.md`（新增）
+  - `apps/client/public/assets/.gitkeep`（新增，占位）
+  - `apps/client/scripts/download-assets.mjs`（新增）
+  - `apps/client/src/assets/manifest.ts`（新增）
+  - `apps/client/src/assets/AssetRegistry.ts`（新增）
+  - `apps/client/src/scenes/PreloadScene.ts`（新增）
+  - `apps/client/src/rendering/PlayerAnimator.ts`（新增）
+  - `apps/client/src/rendering/PlayerAnimator.test.ts`（新增）
+  - `apps/client/src/rendering/BackgroundRenderer.ts`（重写）
+  - `apps/client/src/audio/preferences.ts`（新增）
+  - `apps/client/src/audio/SfxManager.ts`（新增）
+  - `apps/client/src/audio/MusicManager.ts`（新增）
+  - `apps/client/src/audio/SoundManager.ts`（改为 facade）
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/main.ts`
+  - `apps/client/index.html`
+  - `apps/client/src/styles.css`
+  - `eslint.config.js`
+  - `README.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过（新加的 node mjs 例外生效）。
+  - `corepack pnpm run test`：通过；shared 12，client 15（新增 6 个 PlayerAnimator 测试），server 33。
+  - `corepack pnpm run build`：通过；`apps/client/dist/assets/{audio,bg,sprites,CREDITS.md}` 正常发布；client 仍提示 chunk > 500 kB（既有警告）。
+- 风险：
+  - 未做浏览器手测：建议手动跑一次确认 PreloadScene 进度条、菜单/关卡/胜利三段程序化音乐切换、音量滑块持久化、关卡内玩家动画状态切换均符合预期。
+  - 未实际下载 CC0 二进制资源；`download-assets.mjs` 仅引导用户去 Kenney 页面手动下载，URL 失效时需自行寻找替代资源。manifest 中的精灵图帧布局基于 Kenney "Pixel Platformer" 9×12 网格的常见排版，若使用其他资源包需要调整 `SPRITE_FRAMES` 索引。
+  - 程序化 chiptune 简单循环，长时间游玩可能略显单调；后续若导入外部 OGG 会自动覆盖。
+  - 未补充 SfxManager / MusicManager 的运行时单元测试（依赖 AudioContext，难以在 Node 测试环境模拟），主要靠 PlayerAnimator 的纯函数测试与 lint/typecheck/build 把关。
+
+## 2026-04-26 01:40:54 +08:00
+
+- 任务：实际下载并配置 CC0 资源到 `apps/client/public/assets/`，让生产构建携带真实的角色精灵、音乐和音效，同时保持缺失时仍可程序化兜底。
+- 改动：
+  - `apps/client/scripts/download-assets.mjs`：重写为完整的下载/解包工具——直接 fetch 每个 Kenney 资源页 HTML，正则抓取 ZIP 直链（兼容单/双引号 href），下载到 `apps/client/.asset-cache/`，使用内置 `node:zlib` inflateRaw 实现的最小 ZIP 解析器（central directory + STORE/DEFLATE）按 `internal`/`pickByName`/`pickByIndex` 三种规则提取目标文件并落到 `public/assets/` 对应路径。Node 20+ 原生 fetch，无新增依赖。
+  - 资源结构调整：放弃 `background-elements`（kenney.nl 无适配像素风 parallax 包，且 `background-elements-redux`/`platformer-art-pixel-redux` 已下线）；玩家两角色合并到单张 `sprites/players.png`（Kenney "Pixel Platformer" `tilemap-characters_packed.png`，9×3 个 24×24 格），通过行偏移区分 A/B；level_complete/game_complete 改从 `music-jingles` 抓取，因 `ui-audio` 只有点击/开关音效。
+  - `apps/client/src/assets/manifest.ts`：`SPRITE_ASSETS` 简化为单个 `ext_players` spritesheet；移除 `ext_bg_*` 三个背景条目。
+  - `apps/client/src/rendering/PlayerAnimator.ts`：新增 `SHARED_SHEET_KEY` + `ROLE_ROW`（A=row0, B=row1）+ `SHEET_COLS=9`；`SPRITE_FRAMES` 改为 `SPRITE_FRAMES_RELATIVE`（idle=0, run=[1,0,2,0], jump/fall=3, death=4，符合 Kenney 单行布局）；`registerAnimations` 用行偏移生成两套动画，动画 key 改为 `ext_players_<role>_<state>`；`hasExternalSheet`/`getTextureKey`/`getBaseScale` 改用共享 sheet 判定。
+  - 配套清单：`apps/client/public/assets/CREDITS.md` 重写为实际抓取到的资源映射表（角色 PNG + 3 段音乐 + 13 段音效），并解释缺失资源时的兜底行为。
+  - `.gitignore`：忽略 `.asset-cache/` 与 `apps/client/public/assets/{sprites,bg,audio}/`，避免把二进制提交进 Git。
+- 文件：
+  - `apps/client/scripts/download-assets.mjs`（重写）
+  - `apps/client/src/assets/manifest.ts`
+  - `apps/client/src/rendering/PlayerAnimator.ts`
+  - `apps/client/public/assets/CREDITS.md`（重写）
+  - `.gitignore`
+  - `DEV_LOG.md`
+  - 新增（被 .gitignore 忽略）：`apps/client/public/assets/sprites/players.png`、`tiles_terrain.png`、`apps/client/public/assets/audio/music/{menu_loop,level_loop,victory_loop}.ogg`、`apps/client/public/assets/audio/sfx/{jump,land,death,button_press,button_release,interact,door_open,door_close,respawn,laser_hum,level_complete,game_complete}.ogg`，以及缓存 `apps/client/.asset-cache/*.zip`。
+- 验证：
+  - `node apps/client/scripts/download-assets.mjs`：通过；6 个 Kenney 包成功解析直链并提取 15 个目标文件，无 warning。
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过（修掉了未使用的 `copyFile`/`rm` 与 `_role` 报错）。
+  - `corepack pnpm run test`：通过；shared 12，client 15，server 33，总 60。
+  - `corepack pnpm run build`：通过；vite 把 `public/assets/{sprites/players.png, sprites/tiles_terrain.png, audio/music/*.ogg, audio/sfx/*.ogg, CREDITS.md}` 一并发布到 `apps/client/dist/assets/`，client bundle 仍提示 chunk > 500 kB（既有警告，未处理）。
+- 风险：
+  - 未做浏览器手测：建议在 `pnpm dev` 环境下确认外部音乐/音效与玩家精灵实际播放正常、动画状态切换匹配 Kenney 帧布局；若发现某状态帧对应错（例如 hurt/jump 对调），调整 `SPRITE_FRAMES_RELATIVE` 即可。
+  - kenney.nl 直链含时间戳哈希，未来 Kenney 重发时哈希会变，但脚本每次重新解析 HTML 提取，仍能工作；若 Kenney 改版页面结构则需要更新正则。
+  - 资源不进 git，团队其它成员/CI 第一次拉取仓库需要手动跑一次 `download-assets.mjs`；可以在 CI/部署流程里加上这一步。
+  - `tiles_terrain.png` 已下载但目前 `BackgroundRenderer` 与 `TextureGenerator` 都没引用，预留给后续把瓷片美术也接外部资源的工作。
+
+## 2026-04-26 02:21:00 +08:00
+
+- 任务：评估 `levels/level-001.json`～`level-010.json` 配合度与是否存在不可解 / 单人通关漏洞，并修复发现的硬错误与无配合关卡。
+- 分析结论（详见 `C:\Users\benja\.windsurf\plans\level-design-audit-54fcfc.md`）：
+  - L005 在原坐标下物理上不可解：单板 x=240 + delayMs=1100 同向作用 open/close，按板者离板后 1.91 s 才能跑到 door 右沿 800，>1.1 s 关门窗口。
+  - L009 `divider-mid` y=360..656 实墙，玩家从地面跳跃顶点 y=448（+ size 48 = 底 496）无法越过，且 JSON 中没有上路平台落地，关卡不可解。
+  - L010 `spike-pit-b` 跨距 240 px，玩家同高度起跳最大水平距离 ≈ 219.6 px，跨不到 floor-end。
+  - L002、L008 用 toggle latch 单人即可解（除 `requiresBothPlayers` 出口兜底），无位置/时机互锁。
+  - L003、L006、L007 是"两人各跑各的"时机题，配合度弱但无漏洞，作为单一机制教学保留。
+  - L004 用 `interact + holdMs=6000` 教学 interact，配合度弱但属合理教学，且是测试 `hasInteractButton` 唯一来源，保留不改。
+- 改动：
+  - `levels/level-002.json`：从"双 toggle 单门一关一锁"重做为三板接力 hold——`button-1`(x=240) 开 door-1，`button-2`(x=720) 同时开 door-1+door-2，`button-3`(x=1080) 开 door-2；door-2 由 x=1020 移到 x=940 给 button-3 留位置；mechanicTags 由 `["pressure","toggle","door"]` 改为 `["pressure","hold","relay","door"]`，名字改 "Hold Relay"，parTime 50000→60000。
+  - `levels/level-005.json`：仅把 `button-relay.rect.x` 从 240 改到 600（距门 96 px，0.37 s 通过，<1.1 s 关门窗口），保留 `delayMs:1100` 教学意图。
+  - `levels/level-008.json`：`button-conveyor` toggle 改成双板 pressure hold——`button-conveyor-l`(x=260) 与 `button-conveyor-r`(x=1340)，单人无法两端同时按；mechanicTags 由 `["pressure","toggle","moving","spike","wide"]` 改为 `["pressure","hold","moving","spike","wide","coop"]`，parTime 70000→75000。
+  - `levels/level-009.json`：删 `divider-mid`，加上路 `step-a`(200,560)、`step-b`(320,480)、`upper-path`(360,400,600,24) 三块 oneWay 平台；`door-blue` 缩成上路门 `(600,256,32,144)`；`door-amber` 改成下路门 `(920,420,32,236)`，`startsOpen` 由 true 改为 false（避免 floor 玩家初始就能直接走过去）；`button-cipher-b` 由 x=440 移到 x=720（在两扇门之间）。
+  - `levels/level-010.json`：`spike-pit-b.rect.w` 由 240 改 200，`floor-end.rect` 由 `(1320,656,280,64)` 改 `(1280,656,320,64)`，玩家在 crusher 抬起窗口可跳过 200 px 缺口。
+  - `LEVEL_NOTES.md`：同步更新 L002、L005、L008、L009、L010 的关卡说明段，记录新机制与通关流程。
+- 文件：
+  - `levels/level-002.json`
+  - `levels/level-005.json`
+  - `levels/level-008.json`
+  - `levels/level-009.json`
+  - `levels/level-010.json`
+  - `LEVEL_NOTES.md`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 12（含 `level.test.ts` 11 项关卡 schema/机制覆盖断言：仍命中 toggle/timed/interact/delayed/laser cycle/crusher/spike/wide world/moving）、server 33、client 15。
+  - `corepack pnpm run build`：通过。
+- 风险：
+  - 未做双客户端联调实测；L002 三板接力、L008 双端 hold、L009 上下双路与 L010 跳缺口的真实玩家手感都仅按物理参数推算（PLAYER_SPEED=260、JUMP=760、gravity=1800、PLAYER_SIZE=48），现场打可能发现节奏需要再调（例如 L009 跳阶梯的 oneWay 接住边界，或 L010 200 px 缺口仍偏紧）。
+  - L009 删除 `divider-mid` 后客户端如果有针对该平台的渲染缓存或截图，可能需要刷新；当前 `BackgroundRenderer` 只读关卡 JSON 即可，不需要额外改动。
+  - L002 已不包含 `mode:"toggle"` 按钮，但 toggle 标签仍由 L009/L010 提供；如果未来再去掉这两关的 toggle 会让 `hasToggleButton` 测试失败，需要同步关卡校验。
+  - 关卡平衡仍偏中段时机题（L003/L006/L007），整体难度曲线没有重大上调，仅修掉硬错误与无配合关；如果还想加难度，建议后续单独任务针对中段三关引入双人时序约束。

@@ -12,9 +12,17 @@ import {
   type PongMessage,
   type RoomJoinedMessage,
   type RoomStateMessage,
+  type SelectLevelMessage,
 } from "@coop-game/shared";
 import Phaser from "phaser";
 
+import {
+  getAudioPreferences,
+  onAudioPreferencesChange,
+  setMusicVolume,
+  setSfxVolume,
+  toggleMuted,
+} from "./audio/preferences.js";
 import { unlockAudio } from "./audio/SoundManager.js";
 import {
   isNeutralDirectionInput,
@@ -23,6 +31,7 @@ import {
   type DirectionInput,
 } from "./input.js";
 import { GameScene } from "./scenes/GameScene.js";
+import { PreloadScene } from "./scenes/PreloadScene.js";
 import type { GameState } from "./state.js";
 import "./styles.css";
 
@@ -123,6 +132,7 @@ let latestRoomState: GameState = {
 const createRoomButton = getElement<HTMLButtonElement>("create-room-button");
 const readyButton = getElement<HTMLButtonElement>("ready-button");
 const restartButton = getElement<HTMLButtonElement>("restart-button");
+const levelSelect = getElement<HTMLSelectElement>("level-select");
 const joinRoomForm = getElement<HTMLFormElement>("join-room-form");
 const roomCodeInput = getElement<HTMLInputElement>("room-code-input");
 const gameContainer = getElement<HTMLElement>("game");
@@ -147,6 +157,7 @@ gameContainer.addEventListener("pointerdown", () => focusGameControls());
 
 // ── Phaser game ──────────────────────────────────────────────────
 
+const preloadScene = new PreloadScene();
 const gameScene = new GameScene();
 syncSceneState();
 
@@ -163,11 +174,12 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [gameScene],
+  scene: [preloadScene, gameScene],
 };
 
 new Phaser.Game(gameConfig);
 updateInputDebugOverlay();
+setupVolumeControls();
 
 // ── UI events ────────────────────────────────────────────────────
 
@@ -184,6 +196,11 @@ readyButton.addEventListener("click", () => {
 restartButton.addEventListener("click", () => {
   unlockAudio();
   sendRestartVote();
+});
+
+levelSelect.addEventListener("change", () => {
+  unlockAudio();
+  sendLevelSelect();
 });
 
 joinRoomForm.addEventListener("submit", (event) => {
@@ -264,6 +281,8 @@ function attachRoom(nextRoom: GameRoom): void {
 
   nextRoom.onMessage("level_start", (message: LevelStartMessage) => {
     latestRoomState.level = message.level;
+    levelLabel.textContent = getLevelDisplayName(message.levelIndex, message.levelId);
+    syncLevelSelect(message.levelIndex);
     syncSceneState();
   });
 
@@ -665,6 +684,24 @@ function sendRestartVote(): void {
   updateActionButtons();
 }
 
+function sendLevelSelect(): void {
+  if (!activeRoom || !canSelectLevel()) {
+    syncLevelSelect(latestRoomState.levelIndex);
+    return;
+  }
+
+  const levelIndex = Number.parseInt(levelSelect.value, 10);
+
+  if (!Number.isSafeInteger(levelIndex) || levelIndex === latestRoomState.levelIndex) {
+    return;
+  }
+
+  activeRoom.send("select_level", { type: "select_level", levelIndex } satisfies SelectLevelMessage);
+  blurActiveControl();
+  focusGameControls();
+  updateActionButtons();
+}
+
 async function leaveActiveRoom(): Promise<void> {
   if (!activeRoom) return;
   stopInputLoop();
@@ -683,7 +720,8 @@ function updateHudFromState(message: RoomStateMessage): void {
 
   roomCodeLabel.textContent = message.roomCode;
   roleLabel.textContent = myRole ?? "-";
-  levelLabel.textContent = message.levelId ? `${message.levelIndex + 1}: ${message.levelId}` : "-";
+  levelLabel.textContent = getLevelDisplayName(message.levelIndex, message.levelId);
+  syncLevelSelect(message.levelIndex);
   pingLabel.textContent = latestPingMs === null ? "-" : `${latestPingMs}ms`;
 
   const ownPlayer = myRole ? message.players[myRole] : undefined;
@@ -766,8 +804,27 @@ function updateActionButtons(): void {
 
   readyButton.disabled = !canReady;
   restartButton.disabled = !canRestart;
+  levelSelect.disabled = !canSelectLevel();
   readyButton.textContent = readySent ? "READY ✓" : "READY";
   restartButton.textContent = restartRequested ? "RESTART ✓" : "RESTART";
+  levelSelect.title = canSelectLevel() ? "Select level" : "Player A can select levels outside loading.";
+}
+
+function canSelectLevel(): boolean {
+  return (
+    Boolean(activeRoom) &&
+    !roomReconnecting &&
+    myRole === "A" &&
+    latestRoomState.phase !== ROOM_PHASES.loadingLevel
+  );
+}
+
+function syncLevelSelect(levelIndex: number): void {
+  const nextValue = String(levelIndex);
+
+  if (levelSelect.value !== nextValue && document.activeElement !== levelSelect) {
+    levelSelect.value = nextValue;
+  }
 }
 
 function canSendGameplayInput(): boolean {
@@ -780,6 +837,13 @@ function isWarmupState(state: RoomStateMessage): boolean {
 
 function getConnectedPlayerCount(state: RoomStateMessage): number {
   return Object.values(state.players).filter((player) => player?.connected).length;
+}
+
+function getLevelDisplayName(levelIndex: number, levelId: string | null): string {
+  if (!levelId) return "-";
+
+  const title = latestRoomState.level?.id === levelId ? latestRoomState.level.metadata?.title : null;
+  return `${levelIndex + 1}: ${title ?? levelId}`;
 }
 
 // ── Utilities ────────────────────────────────────────────────────
@@ -819,6 +883,7 @@ function setBusy(isBusy: boolean): void {
   roomCodeInput.disabled = isBusy;
   readyButton.disabled = isBusy || readyButton.disabled;
   restartButton.disabled = isBusy || restartButton.disabled;
+  levelSelect.disabled = isBusy || levelSelect.disabled;
   const joinButton = joinRoomForm.querySelector<HTMLButtonElement>("button");
   if (joinButton) joinButton.disabled = isBusy;
 }
@@ -849,4 +914,50 @@ function getElement<TElement extends HTMLElement>(id: string): TElement {
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Request failed.";
+}
+
+// ── Volume controls ──────────────────────────────────────────────
+
+function setupVolumeControls(): void {
+  const toggle = document.getElementById("volume-toggle") as HTMLButtonElement | null;
+  const panel = document.getElementById("volume-panel") as HTMLElement | null;
+  const muteButton = document.getElementById("volume-mute") as HTMLButtonElement | null;
+  const musicSlider = document.getElementById("volume-music") as HTMLInputElement | null;
+  const sfxSlider = document.getElementById("volume-sfx") as HTMLInputElement | null;
+
+  if (!toggle || !panel || !muteButton || !musicSlider || !sfxSlider) return;
+
+  const renderState = (): void => {
+    const prefs = getAudioPreferences();
+    musicSlider.value = String(Math.round(prefs.musicVolume * 100));
+    sfxSlider.value = String(Math.round(prefs.sfxVolume * 100));
+    muteButton.textContent = prefs.muted ? "UNMUTE" : "MUTE";
+    toggle.textContent = prefs.muted ? "🔇" : "🔊";
+    toggle.setAttribute("aria-pressed", panel.classList.contains("open") ? "true" : "false");
+  };
+
+  toggle.addEventListener("click", () => {
+    unlockAudio();
+    panel.classList.toggle("open");
+    renderState();
+  });
+
+  musicSlider.addEventListener("input", () => {
+    unlockAudio();
+    setMusicVolume(Number.parseInt(musicSlider.value, 10) / 100);
+  });
+
+  sfxSlider.addEventListener("input", () => {
+    unlockAudio();
+    setSfxVolume(Number.parseInt(sfxSlider.value, 10) / 100);
+  });
+
+  muteButton.addEventListener("click", () => {
+    unlockAudio();
+    toggleMuted();
+    renderState();
+  });
+
+  onAudioPreferencesChange(() => renderState());
+  renderState();
 }

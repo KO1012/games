@@ -31,6 +31,7 @@ import {
   type RestartVoteMessage,
   type RoomPhase,
   type RoomStateMessage,
+  type SelectLevelMessage,
   type ServerMessageMap,
   type TargetAction,
   type TrapDefinition,
@@ -73,6 +74,14 @@ type PlayerRecord = PlayerSnapshot & {
 type ButtonRuntime = {
   activeUntil: number;
   cooldownUntil: number;
+  latched: boolean;
+  prevPressed: boolean;
+};
+
+type TargetRuntime = {
+  appliedActive: boolean;
+  pendingFlipAt: number;
+  pendingTargetState: boolean;
 };
 
 type PathRuntime = {
@@ -107,6 +116,7 @@ const defaultExitHoldMs = 500;
 const directionPulseTicks = 4;
 const defaultTimedButtonMs = 5000;
 const defaultInteractPulseMs = 350;
+const defaultToggleCooldownMs = 200;
 const interactInputBufferMs = 120;
 const maxQueuedInputsPerPlayer = 20;
 const maxInputReorderSeqGap = 12;
@@ -138,6 +148,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
   private readonly playersBySessionId = new Map<string, PlayerRecord>();
   private readonly sessionIdByRole = new Map<PlayerRole, string>();
   private readonly buttonRuntime = new Map<string, ButtonRuntime>();
+  private readonly targetRuntime = new Map<string, TargetRuntime>();
   private readonly movingRuntime = new Map<string, PathRuntime>();
   private readonly trapRuntime = new Map<string, PathRuntime>();
   private levels: LevelSchema[] = [];
@@ -171,6 +182,10 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
     this.onMessage<RestartVoteMessage>("restart_vote", (client, message) => {
       void this.handleRestartVote(client, message);
+    });
+
+    this.onMessage<SelectLevelMessage>("select_level", (client, message) => {
+      void this.handleSelectLevel(client, message);
     });
 
     this.onMessage<PingMessage>("ping", (client, message) => {
@@ -423,6 +438,39 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     this.broadcastRoomState();
   }
 
+  private async handleSelectLevel(client: CoopClient, message: SelectLevelMessage): Promise<void> {
+    const player = this.playersBySessionId.get(client.sessionId);
+
+    if (!player || !player.connected || !isValidSelectLevelMessage(message)) {
+      return;
+    }
+
+    if (player.role !== PLAYER_ROLES.A || this.phase === ROOM_PHASES.loadingLevel) {
+      return;
+    }
+
+    if (!this.levels[message.levelIndex] || message.levelIndex === this.currentLevelIndex) {
+      return;
+    }
+
+    this.pendingLevelAdvance = false;
+    this.exitHoldStartedAt = null;
+    this.activeExitId = null;
+    this.restartVotes = {};
+
+    for (const currentPlayer of this.playersBySessionId.values()) {
+      currentPlayer.ready = false;
+    }
+
+    this.initializeLevel(message.levelIndex);
+    this.respawnPlayers();
+    this.phase = this.getConnectedPlayerCount() >= this.maxClients ? ROOM_PHASES.readyCheck : ROOM_PHASES.waiting;
+    this.updateLevelMechanics(Date.now());
+    await this.updateMetadata();
+    this.broadcastLevelStart();
+    this.broadcastRoomState();
+  }
+
   private handleInput(client: CoopClient, message: InputMessage): void {
     const player = this.playersBySessionId.get(client.sessionId);
 
@@ -525,6 +573,10 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       this.playersBySessionId.size === this.maxClients &&
       Array.from(this.playersBySessionId.values()).every((player) => player.connected && player.ready)
     );
+  }
+
+  private getConnectedPlayerCount(): number {
+    return Array.from(this.playersBySessionId.values()).filter((player) => player.connected).length;
   }
 
   private async startPlaying(): Promise<void> {
@@ -857,8 +909,11 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
 
       buttons[button.id] = buttonState;
 
-      if (buttonState.active) {
-        for (const target of button.targets) {
+      for (let index = 0; index < button.targets.length; index += 1) {
+        const target = button.targets[index];
+        const applied = this.resolveTargetApplied(button.id, index, target, buttonState.active, now);
+
+        if (applied) {
           applyTargetOverride(target, this.currentLevel, overrides);
         }
       }
@@ -926,7 +981,21 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     const interactPressed = this.consumeInteractForButton(button, pressedBy, now);
     let active = false;
 
-    if (button.kind === "pressure") {
+    if (button.mode === "toggle") {
+      // Toggle latches on press-edge: pressure/timed flip on overlap edge,
+      // interact flips when the interact key is pressed inside the rect.
+      const triggerEdge =
+        button.kind === "interact"
+          ? interactPressed && now >= runtime.cooldownUntil
+          : pressed && !runtime.prevPressed && now >= runtime.cooldownUntil;
+
+      if (triggerEdge) {
+        runtime.latched = !runtime.latched;
+        runtime.cooldownUntil = now + (button.cooldownMs ?? defaultToggleCooldownMs);
+      }
+
+      active = runtime.latched;
+    } else if (button.kind === "pressure") {
       active = pressed;
     } else if (button.kind === "timed") {
       if (pressed && now >= runtime.cooldownUntil) {
@@ -944,12 +1013,48 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       active = now < runtime.activeUntil;
     }
 
+    runtime.prevPressed = pressed;
+
     return {
       id: button.id,
       active,
       pressedBy,
       cooldownUntil: runtime.cooldownUntil,
     };
+  }
+
+  private resolveTargetApplied(
+    buttonId: string,
+    targetIndex: number,
+    target: TargetAction,
+    desired: boolean,
+    now: number,
+  ): boolean {
+    const delayMs = target.delayMs ?? 0;
+
+    if (delayMs <= 0) {
+      return desired;
+    }
+
+    const runtime = this.getTargetRuntime(buttonId, targetIndex);
+
+    if (desired === runtime.appliedActive) {
+      // Already converged; cancel any pending flip that became stale.
+      runtime.pendingFlipAt = 0;
+      return runtime.appliedActive;
+    }
+
+    if (runtime.pendingFlipAt === 0 || runtime.pendingTargetState !== desired) {
+      runtime.pendingFlipAt = now + delayMs;
+      runtime.pendingTargetState = desired;
+    }
+
+    if (now >= runtime.pendingFlipAt) {
+      runtime.appliedActive = runtime.pendingTargetState;
+      runtime.pendingFlipAt = 0;
+    }
+
+    return runtime.appliedActive;
   }
 
   private getButtonRuntime(buttonId: string): ButtonRuntime {
@@ -959,12 +1064,32 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
       return existing;
     }
 
-    const created = {
+    const created: ButtonRuntime = {
       activeUntil: 0,
       cooldownUntil: 0,
+      latched: false,
+      prevPressed: false,
     };
 
     this.buttonRuntime.set(buttonId, created);
+    return created;
+  }
+
+  private getTargetRuntime(buttonId: string, targetIndex: number): TargetRuntime {
+    const key = `${buttonId}:${targetIndex}`;
+    const existing = this.targetRuntime.get(key);
+
+    if (existing) {
+      return existing;
+    }
+
+    const created: TargetRuntime = {
+      appliedActive: false,
+      pendingFlipAt: 0,
+      pendingTargetState: false,
+    };
+
+    this.targetRuntime.set(key, created);
     return created;
   }
 
@@ -1219,6 +1344,7 @@ export class CoopRoom extends Room<{ client: CoopClient }> {
     this.currentLevelIndex = levelIndex;
     this.currentLevel = level;
     this.buttonRuntime.clear();
+    this.targetRuntime.clear();
     this.movingRuntime.clear();
     this.trapRuntime.clear();
 
@@ -1599,6 +1725,10 @@ function isValidReadyMessage(message: ClientReadyMessage): boolean {
 
 function isValidRestartVoteMessage(message: RestartVoteMessage): boolean {
   return message.type === "restart_vote" && typeof message.approve === "boolean";
+}
+
+function isValidSelectLevelMessage(message: SelectLevelMessage): boolean {
+  return message.type === "select_level" && Number.isSafeInteger(message.levelIndex);
 }
 
 function isValidPingMessage(message: PingMessage): boolean {

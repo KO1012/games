@@ -19,6 +19,15 @@ export type LevelWorld = {
   background?: string;
 };
 
+export type LevelMetadata = {
+  title: string;
+  difficulty: number;
+  introText: string;
+  hintText: string;
+  mechanicTags: string[];
+  parTimeMs: number;
+};
+
 export type PlayerSpawn = {
   playerIndex: 0 | 1;
   x: number;
@@ -38,7 +47,7 @@ export type PlatformDefinition = {
 };
 
 export type ButtonKind = "pressure" | "interact" | "timed";
-export type ButtonMode = "hold";
+export type ButtonMode = "hold" | "toggle";
 export type TargetActionType = "open" | "close" | "toggle" | "enable" | "disable" | "start" | "stop";
 
 export type TargetAction = {
@@ -95,6 +104,7 @@ export type LevelSchema = {
   schemaVersion: 1;
   id: string;
   name: string;
+  metadata?: LevelMetadata;
   world: LevelWorld;
   players: [PlayerSpawn, PlayerSpawn];
   platforms: PlatformDefinition[];
@@ -175,6 +185,7 @@ const levelKeys = [
   "schemaVersion",
   "id",
   "name",
+  "metadata",
   "world",
   "players",
   "platforms",
@@ -183,6 +194,8 @@ const levelKeys = [
   "traps",
   "exits",
 ] as const;
+const requiredLevelKeys = levelKeys.filter((key) => key !== "metadata");
+const metadataKeys = ["title", "difficulty", "introText", "hintText", "mechanicTags", "parTimeMs"] as const;
 const worldKeys = ["width", "height", "gravity", "background"] as const;
 const playerSpawnKeys = ["playerIndex", "x", "y", "facing"] as const;
 const rectKeys = ["x", "y", "w", "h"] as const;
@@ -197,7 +210,7 @@ const exitKeys = ["id", "rect", "requiresBothPlayers", "holdMs"] as const;
 
 const platformTypes = new Set<PlatformType>(["solid", "oneWay", "moving"]);
 const buttonKinds = new Set<ButtonKind>(["pressure", "interact", "timed"]);
-const buttonModes = new Set<ButtonMode>(["hold"]);
+const buttonModes = new Set<ButtonMode>(["hold", "toggle"]);
 const targetActions = new Set<TargetActionType>(["open", "close", "toggle", "enable", "disable", "start", "stop"]);
 const trapTypes = new Set<TrapType>(["spike", "laser", "crusher"]);
 const levelIdPattern = /^level-(?:[0-9]{3}|debug-input)$/;
@@ -212,7 +225,7 @@ export function validateLevelSchema(input: unknown): LevelValidationResult {
     };
   }
 
-  checkRequiredKeys(input, levelKeys, "level", errors);
+  checkRequiredKeys(input, requiredLevelKeys, "level", errors);
   checkUnknownKeys(input, levelKeys, "level", errors);
 
   if (input.schemaVersion !== 1) {
@@ -226,6 +239,8 @@ export function validateLevelSchema(input: unknown): LevelValidationResult {
   if (typeof input.name !== "string" || input.name.length < 1 || input.name.length > 64) {
     errors.push("level.name must be 1-64 characters");
   }
+
+  validateMetadata(input.metadata, "level.metadata", errors);
 
   const world = validateWorld(input.world, "level.world", errors);
   const players = validateArray(input.players, "level.players", errors)
@@ -319,6 +334,8 @@ export function resolveHoldButtonDoorState(level: LevelSchema, actors: readonly 
 
   for (const button of level.buttons) {
     const pressedBy = actors.filter((actor) => rectsOverlap(actor.rect, button.rect)).map((actor) => actor.id);
+    // Static preview only models hold-mode pressure activation; toggle/interact
+    // state is owned by the server runtime and not reproduced here.
     const active = button.mode === "hold" && pressedBy.length > 0;
 
     buttons[button.id] = {
@@ -391,6 +408,35 @@ export function resolveHoldButtonDoorState(level: LevelSchema, actors: readonly 
 
 export function rectsOverlap(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function validateMetadata(input: unknown, path: string, errors: string[]): LevelMetadata | null {
+  if (input === undefined) {
+    return null;
+  }
+
+  if (!isRecord(input)) {
+    errors.push(`${path} must be an object`);
+    return null;
+  }
+
+  checkRequiredKeys(input, metadataKeys, path, errors);
+  checkUnknownKeys(input, metadataKeys, path, errors);
+
+  validateTextField(input.title, `${path}.title`, 1, 64, errors);
+  validateNonNegativeInteger(input.difficulty, `${path}.difficulty`, errors);
+  if (Number.isSafeInteger(input.difficulty) && (input.difficulty as number) < 1) {
+    errors.push(`${path}.difficulty must be at least 1`);
+  }
+  validateTextField(input.introText, `${path}.introText`, 1, 180, errors);
+  validateTextField(input.hintText, `${path}.hintText`, 1, 180, errors);
+  validateStringArray(input.mechanicTags, `${path}.mechanicTags`, errors);
+  validateNonNegativeInteger(input.parTimeMs, `${path}.parTimeMs`, errors);
+  if (Number.isSafeInteger(input.parTimeMs) && (input.parTimeMs as number) < 1000) {
+    errors.push(`${path}.parTimeMs must be at least 1000`);
+  }
+
+  return input as LevelMetadata;
 }
 
 function validateWorld(input: unknown, path: string, errors: string[]): LevelWorld | null {
@@ -491,7 +537,7 @@ function validateButton(input: unknown, path: string, errors: string[]): ButtonD
   }
 
   if (!buttonModes.has(input.mode as ButtonMode)) {
-    errors.push(`${path}.mode must be hold`);
+    errors.push(`${path}.mode must be hold or toggle`);
   }
 
   validateRect(input.rect, `${path}.rect`, errors);
@@ -797,6 +843,26 @@ function validateArray(input: unknown, path: string, errors: string[]): unknown[
 function validateString(input: unknown, path: string, errors: string[]): void {
   if (typeof input !== "string" || input.length === 0) {
     errors.push(`${path} must be a non-empty string`);
+  }
+}
+
+function validateTextField(input: unknown, path: string, minLength: number, maxLength: number, errors: string[]): void {
+  if (typeof input !== "string" || input.length < minLength || input.length > maxLength) {
+    errors.push(`${path} must be ${minLength}-${maxLength} characters`);
+  }
+}
+
+function validateStringArray(input: unknown, path: string, errors: string[]): void {
+  const values = validateArray(input, path, errors);
+
+  if (values.length < 1 || values.length > 8) {
+    errors.push(`${path} must contain 1-8 tags`);
+  }
+
+  for (const [index, value] of values.entries()) {
+    if (typeof value !== "string" || !/^[a-z0-9-]+$/.test(value) || value.length > 24) {
+      errors.push(`${path}[${index}] must be a lowercase tag`);
+    }
   }
 }
 

@@ -48,12 +48,17 @@ export type RestartVoteMessage = {
   approve: boolean;
 };
 
+export type SelectLevelMessage = {
+  type: "select_level";
+  levelIndex: number;
+};
+
 export type PingMessage = {
   type: "ping";
   clientTime: number;
 };
 
-export type ClientMessage = ClientReadyMessage | InputMessage | RestartVoteMessage | PingMessage;
+export type ClientMessage = ClientReadyMessage | InputMessage | RestartVoteMessage | SelectLevelMessage | PingMessage;
 
 export type PlayerState = {
   sessionId: string;

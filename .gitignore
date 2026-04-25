@@ -9,3 +9,9 @@ coverage/
 *.log
 pnpm-debug.log*
 
+# Downloaded CC0 asset binaries (run apps/client/scripts/download-assets.mjs)
+.asset-cache/
+apps/client/public/assets/sprites/
+apps/client/public/assets/bg/
+apps/client/public/assets/audio/
+

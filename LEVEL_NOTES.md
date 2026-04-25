@@ -2,64 +2,65 @@
 
 ## 设计边界
 
-本批关卡已改为横版平台跳跃布局。当前使用机制包括：`solid`、`oneWay`、`moving`、`pressure`、`timed`、`interact`、`door`、`spike`、`laser`、`crusher`、`exit`。玩家移动、碰撞、机关、死亡复活和通关仍由服务端权威处理。
+本批关卡重新设计为“一关一机制”的教学路径，最后一关综合。现有机制：`solid`、`oneWay`、`moving`、`pressure(hold|toggle)`、`interact`、`timed`、`door`、`spike`、`laser`、`crusher`、`exit`，以及目标动作 `delayMs`。服务器仍然是唯一权威。
 
-## Level 001：Jump Relay Gate
+## Level 001：Press & Cross
 
-- 难度：1/10。
-- 设计意图：教学跳跃、压力按钮、接力开门。
-- 通关方式：一名玩家踩左侧按钮，另一名玩家跳过平台并穿门；右侧玩家踩右侧按钮后放第一名玩家通过。
+- 难度：1/5。
+- 机制：`pressure` + `door`。
+- 通关方式：一名玩家踩左侧压力板维持中门打开，另一名玩家跳过中门后踩右侧压力板，放第一名玩家通过，两人一起到达出口。
 
-## Level 002：Two Gate Jump Chain
+## Level 002：Hold Relay
 
-- 难度：2/10。
-- 设计意图：把单门接力扩展为两道门。
-- 通关方式：左、中、右三个按钮依次维持前后门，两名玩家轮流推进。
+- 难度：2/5。
+- 机制：`pressure` + `mode: hold` + `door`，三板接力。
+- 通关方式：起点板 `button-1` 开 door-1，中段板 `button-2` 同时开 door-1 和 door-2，终点板 `button-3` 开 door-2。一人持板让另一人前进，到达下一块板后接力切换；单人无法越过 door-1（顶 y=360 不可跳），强制双人接力。
 
-## Level 003：Upper Switchback
+## Level 003：Timed Sprint
 
-- 难度：3/10。
-- 设计意图：要求玩家跳上单向平台并在高处接力。
-- 通关方式：左侧高台按钮打开中央门，另一名玩家通过后踩右侧高台按钮放同伴通过。
+- 难度：2/5。
+- 机制：`timed` + `door`。
+- 通关方式：踩下限时按钮后门保持开启 4.5 秒，两名玩家在窗口内一起冲到出口；超时后需要重新踩板。
 
-## Level 004：Laser Hand-Off
+## Level 004：Interact Lift
 
-- 难度：4/10。
-- 设计意图：引入激光关闭配合。
-- 通关方式：一名玩家踩左侧安全按钮关闭激光，另一名玩家通过后踩右侧安全按钮，第一名玩家再通过。
+- 难度：3/5。
+- 机制：`interact` + `moving` + `spike`。
+- 通关方式：玩家靠近左侧面板按 E 启动 ferry 6 秒，ferry 在尖刺坑上方左右往返；两人轮流踏上 ferry 并抵达右侧平台。
 
-## Level 005：Moving Platform Ferry
+## Level 005：Delayed Gate
 
-- 难度：5/10。
-- 设计意图：引入移动平台和尖刺坑。
-- 通关方式：一名玩家踩按钮启动平台，另一名玩家乘平台越过尖刺坑；右侧玩家再启动平台接回同伴。
+- 难度：3/5。
+- 机制：`pressure` + `delayMs: 1100` + `door`。
+- 通关方式：压力板紧贴门的左侧（x=600，距门 96 px）。一人踩板等门约 1.1 秒后打开，队友越过；持板者离开后冲门，1.1 秒关门窗口约 0.4 秒可达，刚好够通过。
 
-## Level 006：Split Route Lift
+## Level 006：Strobe Lasers
 
-- 难度：6/10。
-- 设计意图：上下路线互相开门。
-- 通关方式：下路玩家打开上路门，上路玩家打开下路门，最后右侧按钮同时放行两人。
+- 难度：3/5。
+- 机制：`laser cycle` + `spike`。
+- 通关方式：两道反相激光墙轮流亮灭。玩家上到中间安全平台作为中转点，接力走过两道激光，再跳过出口前的尖刺。
 
-## Level 007：Cross Gate Toggle
+## Level 007：Crusher Corridor
 
-- 难度：7/10。
-- 设计意图：门组状态交叉变化。
-- 通关方式：左侧按钮关闭前门并打开后门，推进者到右侧按钮后重新打开前门放同伴通过。
+- 难度：4/5。
+- 机制：`crusher`。
+- 通关方式：路径压机在中央通道内上下往返。玩家在压机抬起的窗口一起走过路径下方，抵达出口。
 
-## Level 008：Timed Door Sprint
+## Level 008：Conveyor Outpost
 
-- 难度：8/10。
-- 设计意图：引入限时门和低矮尖刺。
-- 通关方式：触发限时按钮后通过平台段，另一侧玩家再触发按钮放同伴通过。
+- 难度：4/5。
+- 机制：宽世界（1600）+ `pressure mode: hold` + `moving` + `spike`，双端按板。
+- 通关方式：起点和终点各一块 hold 压力板，按住任一块都让 conveyor 持续来回；A 持起点板，B 骑 conveyor 过去后改持终点板，A 再骑 conveyor 反向。单人无法两端同时按，无法独自通关。
 
-## Level 009：Laser Rhythm Climb
+## Level 009：Cipher Doors
 
-- 难度：9/10。
-- 设计意图：激光节奏与高台按钮组合。
-- 通关方式：玩家利用激光周期或互相踩按钮关闭激光，按平台路线依次通过两个危险段。
+- 难度：4/5。
+- 机制：双 `pressure mode: toggle` + 互斥 `open`/`close` 目标 + `door`，上下双路。
+- 关卡布局：地面下路被 `door-amber`（y=420..656）封锁；上方加 `step-a`(y=560)、`step-b`(y=480) 阶梯和 `upper-path`(y=400..424) 长平台，`door-blue`（y=256..400）封住上路。两道门起步均关闭。
+- 通关方式：button-cipher-a (左侧地面) 锁定后开 blue 关 amber → 上路通；button-cipher-b (中段地面 x=720) 锁定后开 amber 关 blue → 下路通。两人协调切换 latch，一人走上路 (跳阶梯过 blue) 一人走下路 (过 amber) 在右侧汇合。
 
-## Level 010：Final Platform Relay
+## Level 010：Last Stand
 
-- 难度：10/10。
-- 设计意图：综合移动平台、尖刺坑、交互门、激光和压墙。
-- 通关方式：先用按钮启动平台越过尖刺坑，再由右侧玩家用交互按钮打开终门并关闭激光，最终两人进入出口。
+- 难度：5/5。
+- 机制：宽世界（1600）+ `mode: toggle` + `timed` + `delayMs` + `moving` + `laser cycle` + `crusher` + `spike`。
+- 通关方式：起点 toggle ferry 跨过第一道尖刺坑；中段限时按钮关闭激光以供两人通过；后段在 crusher 抬起的窗口跳过 200 px 宽的 `spike-pit-b` 落在 `floor-end`（x=1280..1600）；最后一名玩家踩下延迟压力板（1s）提前开启最终门，两人一起进入 `requiresBothPlayers` 出口。

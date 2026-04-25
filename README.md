@@ -72,6 +72,29 @@ corepack pnpm run build
 
 构建产物位于各 workspace 的 `dist/`，不要提交到 Git。
 
+## 美术与音频资源
+
+仓库 **不提交任何二进制资源**（`.gitignore` 已忽略 `apps/client/public/assets/{sprites,bg,audio}/` 与 `apps/client/.asset-cache/`）。客户端启动时优先尝试加载 `apps/client/public/assets/` 下的精灵图与音频；若文件缺失，自动回退到程序化生成的像素美术与 Web Audio 合成音乐/音效，所以仓库克隆后可直接 `pnpm run dev` 游玩。
+
+下载完整版资源（CC0，全部来自 [Kenney](https://kenney.nl)）：
+
+```bash
+node apps/client/scripts/download-assets.mjs
+```
+
+脚本逻辑：
+
+1. 直连每个 Kenney 资源页，正则抓取真实 ZIP 直链。
+2. 下载到 `apps/client/.asset-cache/`（缓存，第二次运行复用）。
+3. 用内置 ZIP 解析器（`node:zlib` inflateRaw）按规则提取目标文件到 `apps/client/public/assets/{sprites,audio/music,audio/sfx}/`。
+4. 全部为 CC0，无新增 npm 依赖，需要 Node 20+。
+
+下载后的资源映射表见 `apps/client/public/assets/CREDITS.md`。重新运行 `pnpm run dev:client` 后，PreloadScene 会自动检测新文件并切换到外部资源；Phaser 的 spritesheet 帧、音乐 OGG、音效 OGG 都会替换对应的程序化兜底。
+
+游戏左下角的 🔊 按钮可调整音乐 / 音效音量并切换静音；偏好通过 `localStorage` 持久化。
+
+> 当 Kenney 改版页面结构、ZIP 直链失效时，脚本会报错指向哪个 slug 失败；可参考 `download-assets.mjs` 中的 `findZipUrl` 调整正则，或手工把所需文件按 `CREDITS.md` 的目录结构放入 `public/assets/`。
+
 ## 常见问题
 
 ### 客户端连不上服务端
