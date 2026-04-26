@@ -28,13 +28,9 @@ import { BackgroundRenderer } from "../rendering/BackgroundRenderer.js";
 import { PlayerAnimator } from "../rendering/PlayerAnimator.js";
 import { generateAllTextures } from "../rendering/TextureGenerator.js";
 import {
-  BUTTON_ACTIVE,
-  BUTTON_IDLE,
   getDoorColor,
-  DOOR_FRAME,
   DOOR_INDICATOR_CLOSED,
   DOOR_INDICATOR_OPEN,
-  EXIT_GLOW,
   LASER_CORE,
   LASER_GLOW,
   PLATFORM_MOVING,
@@ -44,7 +40,10 @@ import type { GameState } from "../state.js";
 /** Pixel font family – loaded via Google Fonts in index.html */
 const PIXEL_FONT = "'Press Start 2P', monospace";
 
-type MechanismView = Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite;
+type MechanismView =
+  | Phaser.GameObjects.Rectangle
+  | Phaser.GameObjects.Image
+  | Phaser.GameObjects.TileSprite;
 type RectLike = { x: number; y: number; w: number; h: number };
 type PointLike = { x: number; y: number };
 type MechanismLinkView = {
@@ -53,6 +52,18 @@ type MechanismLinkView = {
   action: string;
   graphics: Phaser.GameObjects.Graphics;
 };
+
+function getDoorTextureKey(colorKey: string | undefined): string {
+  switch (colorKey) {
+    case "blue":
+    case "orange":
+    case "red":
+    case "green":
+      return `door_${colorKey}`;
+    default:
+      return "door_purple";
+  }
+}
 
 export type RenderDebugInfo = {
   cameraScrollX: number;
@@ -80,9 +91,9 @@ export class GameScene extends Phaser.Scene {
   // -- Level objects --
   private renderedLevelId: string | null = null;
   private levelObjects: Phaser.GameObjects.GameObject[] = [];
-  private buttonViews: Record<string, Phaser.GameObjects.Rectangle> = {};
+  private buttonViews: Record<string, Phaser.GameObjects.TileSprite> = {};
   private mechanismLinks: MechanismLinkView[] = [];
-  private doorViews: Record<string, Phaser.GameObjects.Rectangle> = {};
+  private doorViews: Record<string, Phaser.GameObjects.TileSprite> = {};
   private doorIndicators: Record<string, Phaser.GameObjects.Rectangle> = {};
   private doorFeedbackLabels: Record<string, Phaser.GameObjects.Text> = {};
   private trapViews: Record<string, MechanismView> = {};
@@ -141,11 +152,16 @@ export class GameScene extends Phaser.Scene {
 
     // Control hint
     this.add
-      .text(DEFAULT_CLIENT_WIDTH / 2, DEFAULT_CLIENT_HEIGHT - 16, "WASD MOVE · SPACE JUMP · E INTERACT", {
-        color: "#64748b",
-        fontFamily: PIXEL_FONT,
-        fontSize: "8px",
-      })
+      .text(
+        DEFAULT_CLIENT_WIDTH / 2,
+        DEFAULT_CLIENT_HEIGHT - 16,
+        "WASD MOVE · SPACE JUMP · E INTERACT",
+        {
+          color: "#64748b",
+          fontFamily: PIXEL_FONT,
+          fontSize: "8px",
+        },
+      )
       .setOrigin(0.5)
       .setDepth(50);
 
@@ -309,7 +325,8 @@ export class GameScene extends Phaser.Scene {
     const view = role ? this.playerViews?.[role] : null;
     const playerViewX = view?.visible ? view.x : null;
     const playerViewY = view?.visible ? view.y : null;
-    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })._follow;
+    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })
+      ._follow;
 
     return {
       cameraScrollX: camera.scrollX,
@@ -560,9 +577,12 @@ export class GameScene extends Phaser.Scene {
     // Platforms
     for (const platform of level.platforms) {
       const r = platform.rect;
-      
+
       // Shadow
-      const shadow = this.add.rectangle(r.x + 12, r.y + 16, r.w, r.h, 0x000000, 0.4).setOrigin(0).setDepth(1);
+      const shadow = this.add
+        .rectangle(r.x + 12, r.y + 16, r.w, r.h, 0x000000, 0.4)
+        .setOrigin(0)
+        .setDepth(1);
       this.levelObjects.push(shadow);
 
       if (platform.type === "moving") {
@@ -588,10 +608,7 @@ export class GameScene extends Phaser.Scene {
         }
       } else {
         const texKey = platform.type === "oneWay" ? "platform_oneway" : "platform_solid";
-        const ts = this.add
-          .tileSprite(r.x, r.y, r.w, r.h, texKey)
-          .setOrigin(0)
-          .setDepth(2);
+        const ts = this.add.tileSprite(r.x, r.y, r.w, r.h, texKey).setOrigin(0).setDepth(2);
         this.levelObjects.push(ts);
       }
     }
@@ -601,15 +618,13 @@ export class GameScene extends Phaser.Scene {
     // Buttons
     for (const button of level.buttons) {
       const r = button.rect;
-      const view = this.add
-        .rectangle(r.x, r.y, r.w, r.h, BUTTON_IDLE)
+      const shadow = this.add
+        .rectangle(r.x + 8, r.y + 8, r.w, r.h, 0x000000, 0.3)
         .setOrigin(0)
-        .setStrokeStyle(2, 0xeab308)
-        .setDepth(3);
-      
-      const shadow = this.add.rectangle(r.x + 8, r.y + 8, r.w, r.h, 0x000000, 0.3).setOrigin(0).setDepth(2);
+        .setDepth(2);
       this.levelObjects.push(shadow);
 
+      const view = this.add.tileSprite(r.x, r.y, r.w, r.h, "button_idle").setOrigin(0).setDepth(3);
       this.buttonViews[button.id] = view;
       this.levelObjects.push(view);
 
@@ -633,12 +648,14 @@ export class GameScene extends Phaser.Scene {
 
       // Door body
       const view = this.add
-        .rectangle(r.x, r.y, r.w, r.h, color)
+        .tileSprite(r.x, r.y, r.w, r.h, getDoorTextureKey(door.colorKey))
         .setOrigin(0)
-        .setStrokeStyle(2, DOOR_FRAME)
         .setDepth(5);
-        
-      const shadow = this.add.rectangle(r.x + 12, r.y + 16, r.w, r.h, 0x000000, 0.4).setOrigin(0).setDepth(4);
+
+      const shadow = this.add
+        .rectangle(r.x + 12, r.y + 16, r.w, r.h, 0x000000, 0.4)
+        .setOrigin(0)
+        .setDepth(4);
       this.levelObjects.push(shadow);
 
       this.doorViews[door.id] = view;
@@ -656,7 +673,7 @@ export class GameScene extends Phaser.Scene {
         .text(r.x + r.w / 2, r.y - 10, "LOCKED", {
           fontFamily: PIXEL_FONT,
           fontSize: "7px",
-          color: "#fca5a5",
+          color: `#${color.toString(16).padStart(6, "0")}`,
         })
         .setOrigin(0.5)
         .setDepth(7)
@@ -673,9 +690,8 @@ export class GameScene extends Phaser.Scene {
 
       // Exit frame from texture
       const exitView = this.add
-        .rectangle(r.x, r.y, r.w, r.h, EXIT_GLOW, 0.15)
+        .tileSprite(r.x, r.y, r.w, r.h, "exit_zone")
         .setOrigin(0)
-        .setStrokeStyle(3, 0x22c55e)
         .setDepth(2);
       this.levelObjects.push(exitView);
 
@@ -684,7 +700,7 @@ export class GameScene extends Phaser.Scene {
         .text(r.x + r.w / 2, r.y + r.h / 2, "EXIT", {
           fontFamily: PIXEL_FONT,
           fontSize: "8px",
-          color: "#22c55e",
+          color: "#35d6c5",
         })
         .setOrigin(0.5)
         .setAlpha(0.6)
@@ -699,16 +715,10 @@ export class GameScene extends Phaser.Scene {
 
       if (trap.type === "spike") {
         // Spike uses tiled spike texture
-        view = this.add
-          .tileSprite(r.x, r.y, r.w, r.h, "trap_spike")
-          .setOrigin(0)
-          .setDepth(4);
+        view = this.add.tileSprite(r.x, r.y, r.w, r.h, "trap_spike").setOrigin(0).setDepth(4);
       } else if (trap.type === "laser") {
-        // Laser: colored rectangle with glow
-        view = this.add
-          .rectangle(r.x, r.y, r.w, r.h, LASER_CORE, 0.9)
-          .setOrigin(0)
-          .setDepth(4);
+        // Laser: tiled beam with glow
+        view = this.add.tileSprite(r.x, r.y, r.w, r.h, "trap_laser").setOrigin(0).setDepth(4);
         // Glow behind
         const glow = this.add
           .rectangle(r.x - 2, r.y, r.w + 4, r.h, LASER_GLOW, 0.25)
@@ -717,10 +727,7 @@ export class GameScene extends Phaser.Scene {
         this.levelObjects.push(glow);
       } else {
         // Crusher
-        view = this.add
-          .tileSprite(r.x, r.y, r.w, r.h, "trap_crusher")
-          .setOrigin(0)
-          .setDepth(4);
+        view = this.add.tileSprite(r.x, r.y, r.w, r.h, "trap_crusher").setOrigin(0).setDepth(4);
       }
 
       this.trapViews[trap.id] = view;
@@ -754,7 +761,8 @@ export class GameScene extends Phaser.Scene {
     for (const [id, view] of Object.entries(this.buttonViews)) {
       const bs = state.buttons[id];
       const isActive = bs?.active ?? false;
-      view.setFillStyle(isActive ? BUTTON_ACTIVE : BUTTON_IDLE, isActive ? 1 : 0.75);
+      view.setTexture(isActive ? "button_active" : "button_idle");
+      view.setAlpha(isActive ? 1 : 0.85);
 
       // Audio trigger
       const wasActive = this.prevButtons[id] ?? false;
@@ -772,7 +780,6 @@ export class GameScene extends Phaser.Scene {
       const targetAlpha = isOpen ? 0.12 : 1;
       const current = view.alpha;
       view.setAlpha(current + (targetAlpha - current) * 0.15);
-      view.setStrokeStyle(2, DOOR_FRAME, 1);
 
       // Indicator
       const indicator = this.doorIndicators[id];
@@ -889,7 +896,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private getMechanismTargetCenter(level: LevelSchema, targetId: string, state: GameState | null): PointLike | null {
+  private getMechanismTargetCenter(
+    level: LevelSchema,
+    targetId: string,
+    state: GameState | null,
+  ): PointLike | null {
     const door = level.doors.find((candidate) => candidate.id === targetId);
     if (door) return this.getRectCenter(door.rect);
 
@@ -903,7 +914,9 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    const platform = level.platforms.find((candidate) => candidate.id === targetId && candidate.type === "moving");
+    const platform = level.platforms.find(
+      (candidate) => candidate.id === targetId && candidate.type === "moving",
+    );
     if (platform) {
       const platformState = state?.movingPlatforms[targetId];
       return this.getRectCenter({
@@ -925,7 +938,9 @@ export class GameScene extends Phaser.Scene {
     if (trap?.type === "crusher") return 0xf97316;
     if (trap?.type === "spike") return 0xf43f5e;
 
-    const platform = level.platforms.find((candidate) => candidate.id === targetId && candidate.type === "moving");
+    const platform = level.platforms.find(
+      (candidate) => candidate.id === targetId && candidate.type === "moving",
+    );
     if (platform) return PLATFORM_MOVING;
 
     return action === "close" || action === "disable" || action === "stop" ? 0xf97316 : 0x22c55e;
@@ -954,7 +969,8 @@ export class GameScene extends Phaser.Scene {
 
   private syncCameraFollow(role: PlayerRole, view: Phaser.GameObjects.Sprite): void {
     const camera = this.cameras.main;
-    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })._follow;
+    const followTarget = (camera as unknown as { _follow?: Phaser.GameObjects.GameObject | null })
+      ._follow;
 
     if (this.cameraFollowRole === role && followTarget === view) {
       return;
@@ -984,7 +1000,8 @@ export class GameScene extends Phaser.Scene {
       const view = this.doorViews[door.id];
       const label = this.doorFeedbackLabels[door.id];
       const isOpen = state.doors[door.id]?.open ?? door.startsOpen;
-      const blocked = !isOpen && this.isPlayerPressingClosedDoor(playerRect, localPlayer.facing, door.rect);
+      const blocked =
+        !isOpen && this.isPlayerPressingClosedDoor(playerRect, localPlayer.facing, door.rect);
 
       if (!view || !label) {
         continue;
@@ -993,9 +1010,10 @@ export class GameScene extends Phaser.Scene {
       if (blocked) {
         const pulse = 0.65 + Math.sin(time * 0.018) * 0.25;
         label.setVisible(true).setAlpha(pulse);
-        view.setStrokeStyle(4, 0xfca5a5, 0.9);
+        view.setTint(0xff91da);
       } else {
         label.setVisible(false).setAlpha(0);
+        view.clearTint();
       }
     }
   }
@@ -1006,10 +1024,21 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private isPlayerPressingClosedDoor(playerRect: RectLike, facing: -1 | 1, doorRect: RectLike): boolean {
-    const verticalOverlap = playerRect.y < doorRect.y + doorRect.h && playerRect.y + playerRect.h > doorRect.y;
-    const nearRightSide = facing === 1 && playerRect.x + playerRect.w >= doorRect.x - 8 && playerRect.x + playerRect.w <= doorRect.x + 10;
-    const nearLeftSide = facing === -1 && playerRect.x <= doorRect.x + doorRect.w + 8 && playerRect.x >= doorRect.x + doorRect.w - 10;
+  private isPlayerPressingClosedDoor(
+    playerRect: RectLike,
+    facing: -1 | 1,
+    doorRect: RectLike,
+  ): boolean {
+    const verticalOverlap =
+      playerRect.y < doorRect.y + doorRect.h && playerRect.y + playerRect.h > doorRect.y;
+    const nearRightSide =
+      facing === 1 &&
+      playerRect.x + playerRect.w >= doorRect.x - 8 &&
+      playerRect.x + playerRect.w <= doorRect.x + 10;
+    const nearLeftSide =
+      facing === -1 &&
+      playerRect.x <= doorRect.x + doorRect.w + 8 &&
+      playerRect.x >= doorRect.x + doorRect.w - 10;
 
     return verticalOverlap && (nearRightSide || nearLeftSide);
   }

@@ -38,26 +38,22 @@ const PACKS = [
   {
     slug: "pixel-platformer",
     pageUrl: "https://kenney.nl/assets/pixel-platformer",
-    files: [
-      { internal: "Tilemap/tilemap-characters_packed.png", dest: "sprites/players.png" },
-      { internal: "Tilemap/tilemap_packed.png", dest: "sprites/tiles_terrain.png" },
-    ],
+    files: [{ internal: "Tilemap/tilemap_packed.png", dest: "sprites/tiles_terrain.png" }],
   },
-  // Background pack omitted on purpose: kenney.nl has no pixel-style
-  // parallax pack that lines up with our 1080×600 canvas. The procedural
-  // BackgroundRenderer already produces a polished multi-layer parallax,
-  // so we keep that as the only background source.
+  // Background pack omitted on purpose: the primary backdrop is a
+  // project-custom imagegen asset committed under public/assets/bg/.
+  // BackgroundRenderer still has a procedural fallback when that file is
+  // missing.
   {
     slug: "music-jingles",
     pageUrl: "https://kenney.nl/assets/music-jingles",
     files: [
-      // music-jingles has 8-bit NES jingles + thematic variants. We use
-      // three NES loops as background music tracks and two longer jingles
-      // for level/game completion fanfares.
-      { pickByName: /8-Bit jingles\/jingles_NES00\.ogg$/i, dest: "audio/music/menu_loop.ogg" },
-      { pickByName: /8-Bit jingles\/jingles_NES03\.ogg$/i, dest: "audio/music/level_loop.ogg" },
-      { pickByName: /8-Bit jingles\/jingles_NES10\.ogg$/i, dest: "audio/music/victory_loop.ogg" },
-      { pickByName: /Pizzicato jingles\/jingles_PIZZI00\.ogg$/i, dest: "audio/sfx/level_complete.ogg" },
+      // Background music is project-generated under audio/music/*.wav.
+      // Keep this pack only for the short completion fanfares.
+      {
+        pickByName: /Pizzicato jingles\/jingles_PIZZI00\.ogg$/i,
+        dest: "audio/sfx/level_complete.ogg",
+      },
       { pickByName: /Steel jingles\/jingles_STEEL00\.ogg$/i, dest: "audio/sfx/game_complete.ogg" },
     ],
   },
@@ -100,7 +96,9 @@ async function findZipUrl(pageUrl) {
   const res = await fetch(pageUrl, { redirect: "follow" });
   if (!res.ok) throw new Error(`Failed to fetch page ${pageUrl}: HTTP ${res.status}`);
   const html = await res.text();
-  const match = html.match(/href=['"](https:\/\/kenney\.nl\/media\/pages\/assets\/[^'"]+\.zip)['"]/);
+  const match = html.match(
+    /href=['"](https:\/\/kenney\.nl\/media\/pages\/assets\/[^'"]+\.zip)['"]/,
+  );
   if (!match) throw new Error(`Could not find ZIP link on ${pageUrl}`);
   return match[1];
 }
@@ -233,7 +231,9 @@ async function processPack(pack) {
     }
 
     if (!entry) {
-      console.warn(`   ⚠ could not find entry for ${fileSpec.dest} (criteria: ${JSON.stringify(fileSpec)})`);
+      console.warn(
+        `   ⚠ could not find entry for ${fileSpec.dest} (criteria: ${JSON.stringify(fileSpec)})`,
+      );
       continue;
     }
 
@@ -260,7 +260,9 @@ async function main() {
   }
 
   console.log("");
-  console.log(failed === 0 ? "All packs processed." : `${failed} pack(s) failed; remaining processed.`);
+  console.log(
+    failed === 0 ? "All packs processed." : `${failed} pack(s) failed; remaining processed.`,
+  );
   console.log(`Cache directory: ${TMP_DIR}`);
   console.log(`Output directory: ${ASSETS_DIR}`);
   console.log("");

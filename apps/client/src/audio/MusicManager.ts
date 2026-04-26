@@ -2,7 +2,7 @@
  * Music manager.
  *
  * Provides scene-based background music with a graceful fallback: when an
- * external OGG track was loaded by PreloadScene we play it through Phaser's
+ * external music track was loaded by PreloadScene we play it through Phaser's
  * sound system at the user-configured volume. Otherwise a small procedural
  * chiptune sequencer renders an ambient loop using Web Audio API so menus
  * and gameplay still feel alive without any binary assets.
@@ -197,14 +197,26 @@ class ProceduralMusic {
 
     while (this.nextBassTime < horizon) {
       const step = this.currentPattern.bass[this.bassIndex];
-      this.scheduleNote(step, beatLength, this.nextBassTime, this.currentPattern.bassWave, this.currentPattern.bassGain);
+      this.scheduleNote(
+        step,
+        beatLength,
+        this.nextBassTime,
+        this.currentPattern.bassWave,
+        this.currentPattern.bassGain,
+      );
       this.nextBassTime += step.duration * beatLength;
       this.bassIndex = (this.bassIndex + 1) % this.currentPattern.bass.length;
     }
 
     while (this.nextLeadTime < horizon) {
       const step = this.currentPattern.lead[this.leadIndex];
-      this.scheduleNote(step, beatLength, this.nextLeadTime, this.currentPattern.leadWave, this.currentPattern.leadGain);
+      this.scheduleNote(
+        step,
+        beatLength,
+        this.nextLeadTime,
+        this.currentPattern.leadWave,
+        this.currentPattern.leadGain,
+      );
       this.nextLeadTime += step.duration * beatLength;
       this.leadIndex = (this.leadIndex + 1) % this.currentPattern.lead.length;
     }

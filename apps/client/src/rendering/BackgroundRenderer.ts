@@ -18,6 +18,8 @@ import type Phaser from "phaser";
 import { isAssetPresent } from "../assets/AssetRegistry.js";
 import { BG_DEEP, BG_MID, BG_TOP, DUST_COLOR } from "../ui/colors.js";
 
+const BACKDROP_KEY = "ext_bg_backdrop";
+
 interface Star {
   x: number;
   y: number;
@@ -41,6 +43,7 @@ export class BackgroundRenderer {
   private height: number;
 
   private skyGradient!: Phaser.GameObjects.Graphics;
+  private backdropLayer?: Phaser.GameObjects.Image;
   private starGraphics!: Phaser.GameObjects.Graphics;
   private fogGraphics!: Phaser.GameObjects.Graphics;
 
@@ -60,16 +63,34 @@ export class BackgroundRenderer {
   private create(): void {
     const w = this.width;
     const h = this.height;
+    const hasBackdrop = isAssetPresent(BACKDROP_KEY);
 
     // ── Sky gradient ──────────────────────────────────────────────
-    this.skyGradient = this.scene.add.graphics().setDepth(-100).setScrollFactor(0);
-    const steps = 24;
-    const stepH = Math.ceil(h / steps);
-    for (let i = 0; i < steps; i++) {
-      const t = i / (steps - 1);
-      const color = lerpColor(BG_DEEP, t < 0.5 ? BG_MID : BG_TOP, t < 0.5 ? t * 2 : (t - 0.5) * 2);
-      this.skyGradient.fillStyle(color);
-      this.skyGradient.fillRect(0, i * stepH, w, stepH + 1);
+    if (hasBackdrop) {
+      this.backdropLayer = this.scene.add
+        .image(0, 0, BACKDROP_KEY)
+        .setOrigin(0)
+        .setDepth(-102)
+        .setScrollFactor(0);
+      this.backdropLayer.setDisplaySize(w, h);
+
+      this.skyGradient = this.scene.add.graphics().setDepth(-101).setScrollFactor(0);
+      this.skyGradient.fillStyle(0x020617, 0.12);
+      this.skyGradient.fillRect(0, 0, w, h);
+    } else {
+      this.skyGradient = this.scene.add.graphics().setDepth(-100).setScrollFactor(0);
+      const steps = 24;
+      const stepH = Math.ceil(h / steps);
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const color = lerpColor(
+          BG_DEEP,
+          t < 0.5 ? BG_MID : BG_TOP,
+          t < 0.5 ? t * 2 : (t - 0.5) * 2,
+        );
+        this.skyGradient.fillStyle(color);
+        this.skyGradient.fillRect(0, i * stepH, w, stepH + 1);
+      }
     }
 
     // Subtle radial vignette overlay on top of sky
@@ -80,7 +101,9 @@ export class BackgroundRenderer {
     vignette.fillRect(0, h - 80, w, 80);
 
     // ── Far layer: external image or procedural skyline ──────────
-    if (isAssetPresent("ext_bg_far")) {
+    if (hasBackdrop) {
+      this.farLayer = this.scene.add.graphics().setDepth(-95).setScrollFactor(0);
+    } else if (isAssetPresent("ext_bg_far")) {
       this.farLayer = this.scene.add
         .tileSprite(0, h - 240, w * 2, 240, "ext_bg_far")
         .setOrigin(0)
@@ -92,7 +115,9 @@ export class BackgroundRenderer {
     }
 
     // ── Mid layer: external image or procedural ridges ────────────
-    if (isAssetPresent("ext_bg_mid")) {
+    if (hasBackdrop) {
+      this.midLayer = this.scene.add.graphics().setDepth(-93).setScrollFactor(0);
+    } else if (isAssetPresent("ext_bg_mid")) {
       this.midLayer = this.scene.add
         .tileSprite(0, h - 180, w * 2, 180, "ext_bg_mid")
         .setOrigin(0)
@@ -247,6 +272,7 @@ export class BackgroundRenderer {
   }
 
   public destroy(): void {
+    this.backdropLayer?.destroy();
     this.skyGradient.destroy();
     this.starGraphics.destroy();
     this.fogGraphics.destroy();

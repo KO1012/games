@@ -8,10 +8,25 @@ coverage/
 !.env.example
 *.log
 pnpm-debug.log*
+tmp-*.png
+.tmp-*/
 
 # Downloaded CC0 asset binaries (run apps/client/scripts/download-assets.mjs)
 .asset-cache/
-apps/client/public/assets/sprites/
+apps/client/public/assets/sprites/*
 apps/client/public/assets/bg/
-apps/client/public/assets/audio/
+apps/client/public/assets/audio/*
 
+# Project-custom visual assets.
+!apps/client/public/assets/sprites/
+!apps/client/public/assets/sprites/players.png
+!apps/client/public/assets/sprites/world/
+!apps/client/public/assets/sprites/world/*.png
+!apps/client/public/assets/bg/
+!apps/client/public/assets/bg/lab_backdrop.png
+
+# Project-custom music assets.
+!apps/client/public/assets/audio/
+!apps/client/public/assets/audio/music/
+apps/client/public/assets/audio/music/*
+!apps/client/public/assets/audio/music/*.wav

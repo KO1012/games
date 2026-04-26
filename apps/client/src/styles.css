@@ -3,9 +3,12 @@
    ================================================================ */
 
 :root {
-  color: #c8d0e0;
-  background: #0b0e1a;
-  font-family: "Inter", -apple-system, sans-serif;
+  color: #c8d8d8;
+  background: #080d13;
+  font-family:
+    "Inter",
+    -apple-system,
+    sans-serif;
   font-size: 14px;
   image-rendering: pixelated;
 }
@@ -24,7 +27,7 @@ body,
 
 body {
   overflow: hidden;
-  background: #0b0e1a;
+  background: #080d13;
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
@@ -38,30 +41,33 @@ select {
 
 button {
   height: 38px;
-  border: 2px solid #38bdf8;
+  border: 2px solid #35d6c5;
   border-radius: 0;
   padding: 0 14px;
-  color: #0b0e1a;
-  background: #38bdf8;
+  color: #071018;
+  background: #35d6c5;
   cursor: pointer;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.08s;
   position: relative;
   /* Pixel shadow */
-  box-shadow: 3px 3px 0 #1a7ab5;
+  box-shadow: 3px 3px 0 #118174;
 }
 
 button:hover:not(:disabled) {
-  background: #7dd3fc;
-  border-color: #7dd3fc;
-  box-shadow: 3px 3px 0 #38bdf8;
+  background: #8ff7ec;
+  border-color: #8ff7ec;
+  box-shadow: 3px 3px 0 #35d6c5;
 }
 
 button:active:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 #1a7ab5;
+  box-shadow: 1px 1px 0 #118174;
 }
 
 button:disabled,
@@ -75,11 +81,11 @@ input,
 select {
   width: 80px;
   height: 38px;
-  border: 2px solid #334155;
+  border: 2px solid #44616a;
   border-radius: 0;
   padding: 0 8px;
   color: #f8fafc;
-  background: #131729;
+  background: #071018;
   font-weight: 800;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -89,16 +95,21 @@ select {
 select {
   width: 180px;
   appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%),
-    linear-gradient(135deg, #94a3b8 50%, transparent 50%);
-  background-position: calc(100% - 14px) 15px, calc(100% - 9px) 15px;
-  background-size: 5px 5px, 5px 5px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8aa4a6 50%),
+    linear-gradient(135deg, #8aa4a6 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 15px,
+    calc(100% - 9px) 15px;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
 }
 
 input:focus,
 select:focus {
-  border-color: #38bdf8;
+  border-color: #35d6c5;
   outline: none;
 }
 
@@ -135,7 +146,7 @@ canvas {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 24px;
-  background: rgba(11, 14, 26, 0.5);
+  background: rgba(7, 16, 24, 0.58);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -152,7 +163,7 @@ canvas {
 }
 
 .eyebrow {
-  color: #22c55e;
+  color: #35d6c5;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 2px;
@@ -169,13 +180,13 @@ canvas {
 }
 
 .panel h1 .accent {
-  color: #38bdf8;
-  text-shadow: 3px 3px 0 #1a7ab5;
+  color: #35d6c5;
+  text-shadow: 3px 3px 0 #118174;
 }
 
 .copy {
   margin-top: 12px;
-  color: #94a3b8;
+  color: #8aa4a6;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -200,7 +211,7 @@ canvas {
 }
 
 .level-picker span {
-  color: #94a3b8;
+  color: #8aa4a6;
   font-family: "Press Start 2P", monospace;
   font-size: 8px;
 }
@@ -217,7 +228,7 @@ canvas {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(11, 14, 26, 0.5);
+  background: rgba(7, 16, 24, 0.58);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
@@ -239,7 +250,7 @@ canvas {
 }
 
 .hud span {
-  color: #94a3b8;
+  color: #8aa4a6;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -255,7 +266,7 @@ canvas {
 }
 
 .hud strong.error {
-  color: #fca5a5;
+  color: #ff91da;
 }
 
 #level-label {
@@ -274,12 +285,14 @@ canvas {
   width: min(560px, calc(100vw - 40px));
   max-height: min(46vh, 420px);
   overflow: auto;
-  border: 1px solid rgba(125, 211, 252, 0.55);
+  border: 1px solid rgba(53, 214, 197, 0.55);
   border-radius: 6px;
   padding: 12px;
   color: #d9f99d;
-  background: rgba(3, 7, 18, 0.86);
-  box-shadow: 0 0 0 1px rgba(11, 14, 26, 0.8), 0 12px 32px rgba(0, 0, 0, 0.5);
+  background: rgba(3, 9, 13, 0.86);
+  box-shadow:
+    0 0 0 1px rgba(7, 16, 24, 0.8),
+    0 12px 32px rgba(0, 0, 0, 0.5);
   font-family: "Consolas", "SFMono-Regular", monospace;
   font-size: 11px;
   line-height: 1.45;
@@ -339,17 +352,17 @@ canvas {
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 2px solid #38bdf8;
-  background: rgba(11, 14, 26, 0.85);
+  border: 2px solid #35d6c5;
+  background: rgba(7, 16, 24, 0.88);
   color: #f8fafc;
   font-family: "Press Start 2P", monospace;
   font-size: 16px;
   cursor: pointer;
-  box-shadow: 3px 3px 0 #1a7ab5;
+  box-shadow: 3px 3px 0 #118174;
 }
 
 #volume-toggle:hover {
-  background: #1a3047;
+  background: #1d2b35;
 }
 
 .volume-panel {
@@ -358,9 +371,9 @@ canvas {
   gap: 10px;
   min-width: 180px;
   padding: 12px 14px;
-  border: 2px solid #38bdf8;
-  background: rgba(11, 14, 26, 0.92);
-  box-shadow: 3px 3px 0 #1a7ab5;
+  border: 2px solid #35d6c5;
+  background: rgba(7, 16, 24, 0.92);
+  box-shadow: 3px 3px 0 #118174;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -373,7 +386,7 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #94a3b8;
+  color: #8aa4a6;
   font-family: "Press Start 2P", monospace;
   font-size: 8px;
   letter-spacing: 1px;
@@ -394,15 +407,15 @@ canvas {
 
 .volume-panel input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
-  background: #131729;
-  border: 1px solid #38bdf8;
+  background: #071018;
+  border: 1px solid #35d6c5;
 }
 
 .volume-panel input[type="range"]::-webkit-slider-thumb {
   width: 12px;
   height: 12px;
   margin-top: -4px;
-  background: #38bdf8;
+  background: #35d6c5;
   border: 0;
   appearance: none;
   cursor: pointer;
@@ -410,14 +423,14 @@ canvas {
 
 .volume-panel input[type="range"]::-moz-range-track {
   height: 6px;
-  background: #131729;
-  border: 1px solid #38bdf8;
+  background: #071018;
+  border: 1px solid #35d6c5;
 }
 
 .volume-panel input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: #38bdf8;
+  background: #35d6c5;
   border: 0;
   cursor: pointer;
 }

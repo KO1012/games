@@ -964,3 +964,116 @@
   - L009 删除 `divider-mid` 后客户端如果有针对该平台的渲染缓存或截图，可能需要刷新；当前 `BackgroundRenderer` 只读关卡 JSON 即可，不需要额外改动。
   - L002 已不包含 `mode:"toggle"` 按钮，但 toggle 标签仍由 L009/L010 提供；如果未来再去掉这两关的 toggle 会让 `hasToggleButton` 测试失败，需要同步关卡校验。
   - 关卡平衡仍偏中段时机题（L003/L006/L007），整体难度曲线没有重大上调，仅修掉硬错误与无配合关；如果还想加难度，建议后续单独任务针对中段三关引入双人时序约束。
+
+## 2026-04-26 15:52:47 +08:00
+
+- 任务：调用 imagegen 重新设计游戏美术资源，并接入客户端。
+- 改动：
+  - 使用 imagegen 生成地下交通实验室像素风背景，新增 `ext_bg_backdrop` 加载入口，背景优先使用 `assets/bg/lab_backdrop.png`，缺失时回退程序化背景。
+  - 替换 `players.png` 为项目定制 9×3、24×24 玩家 spritesheet，玩家 A/B 改为青绿/琥珀色实验室跑者。
+  - 调整平台、按钮、门、陷阱、出口、墙体纹理细节和全局配色，使程序化纹理匹配新背景。
+  - 更新 UI CSS 配色、资源说明、下载脚本和 `.gitignore`，避免下载脚本覆盖定制玩家图，并提交指定定制美术资源。
+- 文件：
+  - `.gitignore`
+  - `apps/client/public/assets/bg/lab_backdrop.png`
+  - `apps/client/public/assets/sprites/players.png`
+  - `apps/client/public/assets/CREDITS.md`
+  - `apps/client/scripts/download-assets.mjs`
+  - `apps/client/src/assets/manifest.ts`
+  - `apps/client/src/rendering/BackgroundRenderer.ts`
+  - `apps/client/src/rendering/PlayerAnimator.ts`
+  - `apps/client/src/rendering/TextureGenerator.ts`
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/scenes/PreloadScene.ts`
+  - `apps/client/src/styles.css`
+  - `apps/client/src/ui/colors.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm exec prettier --write ...`：通过；首次包含 `.gitignore` 时 Prettier 无 parser 报错，已排除 `.gitignore` 后重跑通过。
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 12 个测试、client 15 个测试、server 33 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - 本地开发服：`http://127.0.0.1:5173` 返回 200，`http://127.0.0.1:2567` 返回 200。
+  - 资源加载：`/assets/bg/lab_backdrop.png` 和 `/assets/sprites/players.png` 均返回 200。
+  - Chrome headless 截图检查：主界面正常显示新背景、UI 配色和布局，无明显遮挡。
+- 风险：
+  - 未做双浏览器联机通关回归；本次重点验证资源加载、构建和主界面显示。
+  - 新背景约 2 MB，首次加载体积比程序化背景更大。
+  - 本机 PowerShell 启动异常，本次命令通过 Node 子进程调用 `cmd.exe` 执行。
+
+## 2026-04-26 16:14:11 +08:00
+
+- 任务：继续调用 imagegen 设计一整套游戏美术资源并应用到客户端渲染。
+- 改动：
+  - 使用 imagegen 重新生成主背景 `lab_backdrop.png`，视觉方向统一为地下交通实验室像素风。
+  - 新增 `sprites/world/*.png` 外部纹理资源：平台、单向平台、移动平台、按钮、五色门、尖刺、激光、压墙、出口、墙体、粒子。
+  - `manifest.ts` 增加整套世界纹理加载项；`TextureGenerator.ts` 在外部纹理已加载时不再覆盖，保留缺失资源兜底。
+  - `GameScene.ts` 改为按钮、门、激光、出口优先使用 TileSprite PNG 纹理，并把门阻挡反馈改为 tint 反馈。
+  - `CREDITS.md` 与 `.gitignore` 同步记录并纳入项目定制资源。
+- 文件：
+  - `.gitignore`
+  - `apps/client/public/assets/bg/lab_backdrop.png`
+  - `apps/client/public/assets/sprites/world/button_active.png`
+  - `apps/client/public/assets/sprites/world/button_idle.png`
+  - `apps/client/public/assets/sprites/world/door_blue.png`
+  - `apps/client/public/assets/sprites/world/door_green.png`
+  - `apps/client/public/assets/sprites/world/door_orange.png`
+  - `apps/client/public/assets/sprites/world/door_purple.png`
+  - `apps/client/public/assets/sprites/world/door_red.png`
+  - `apps/client/public/assets/sprites/world/exit_zone.png`
+  - `apps/client/public/assets/sprites/world/pixel_particle.png`
+  - `apps/client/public/assets/sprites/world/platform_moving.png`
+  - `apps/client/public/assets/sprites/world/platform_oneway.png`
+  - `apps/client/public/assets/sprites/world/platform_solid.png`
+  - `apps/client/public/assets/sprites/world/trap_crusher.png`
+  - `apps/client/public/assets/sprites/world/trap_laser.png`
+  - `apps/client/public/assets/sprites/world/trap_spike.png`
+  - `apps/client/public/assets/sprites/world/wall_tile.png`
+  - `apps/client/public/assets/CREDITS.md`
+  - `apps/client/src/assets/manifest.ts`
+  - `apps/client/src/rendering/TextureGenerator.ts`
+  - `apps/client/src/scenes/GameScene.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - `corepack pnpm exec prettier --write ...`：通过。
+  - `corepack pnpm run typecheck`：通过；中途发现门 TileSprite 旧描边 API 类型错误，已改为 tint 后重跑通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 12 个测试、client 15 个测试、server 33 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - 资源 HTTP 检查：`/assets/bg/lab_backdrop.png`、`/assets/sprites/world/button_active.png`、`/assets/sprites/world/door_green.png` 均返回 200。
+- 风险：
+  - Chrome/Edge headless 截图命令本轮卡在浏览器自身后台服务错误，未产出新截图；已用资源 HTTP 检查和构建验证兜底。
+  - 未做双浏览器联机通关回归。
+  - 新背景约 1.9 MB，首次加载体积仍明显高于程序化背景。
+
+## 2026-04-26 16:22:46 +08:00
+
+- 任务：替换当前项目背景音乐。
+- 改动：
+  - 新增 3 条项目内生成的 WAV 循环曲，分别用于菜单、关卡和通关阶段。
+  - 更新客户端音频 manifest，使 `music_menu`、`music_level`、`music_victory` 改用新 WAV。
+  - 更新资源下载脚本，Kenney Music Jingles 只继续用于通关音效，不再覆盖背景音乐。
+  - 更新资源版权说明和 `.gitignore`，只纳入项目定制音乐 WAV，继续忽略旧 OGG 和 SFX 下载资源。
+- 文件：
+  - `.gitignore`
+  - `apps/client/public/assets/audio/music/menu_lab_drift.wav`
+  - `apps/client/public/assets/audio/music/level_circuit_run.wav`
+  - `apps/client/public/assets/audio/music/victory_signal_clear.wav`
+  - `apps/client/public/assets/CREDITS.md`
+  - `apps/client/scripts/download-assets.mjs`
+  - `apps/client/src/assets/manifest.ts`
+  - `apps/client/src/audio/MusicManager.ts`
+  - `DEV_LOG.md`
+- 验证：
+  - WAV 头校验：3 个文件均为 RIFF/WAVE、44.1kHz、16-bit、mono；时长约 20.87s、30.97s、17.14s。
+  - `corepack pnpm exec prettier --check .gitignore apps/client/public/assets/CREDITS.md apps/client/scripts/download-assets.mjs apps/client/src/assets/manifest.ts apps/client/src/audio/MusicManager.ts DEV_LOG.md`：失败；`.gitignore` 无可推断 parser，且 `CREDITS.md`、`MusicManager.ts` 需要格式化。
+  - `corepack pnpm exec prettier --write apps/client/public/assets/CREDITS.md apps/client/scripts/download-assets.mjs apps/client/src/assets/manifest.ts apps/client/src/audio/MusicManager.ts DEV_LOG.md`：通过。
+  - `corepack pnpm run typecheck`：通过。
+  - `corepack pnpm run lint`：通过。
+  - `corepack pnpm run test`：通过；shared 12 个测试、client 15 个测试、server 33 个测试。
+  - `corepack pnpm run build`：通过；Vite 仍提示客户端 chunk 超过 500 kB。
+  - 资源 HTTP 检查：`/assets/audio/music/menu_lab_drift.wav`、`/assets/audio/music/level_circuit_run.wav`、`/assets/audio/music/victory_signal_clear.wav` 均返回 200。
+- 风险：
+  - 未做浏览器人工试听和双浏览器联机通关回归。
+  - 旧 OGG 文件保留在本地但不再被 manifest 引用。

@@ -58,16 +58,16 @@ export function selectPlayerAnimState(
 }
 
 /**
- * Both players share a single character spritesheet (Kenney "Pixel Platformer",
- * 9 columns × 3 rows of 24×24 packed frames). Each role picks a row.
+ * Both players share a single project-custom character spritesheet
+ * (9 columns × 3 rows of 24×24 packed frames). Each role picks a row.
  */
 const SHARED_SHEET_KEY = "ext_players";
 const SHEET_COLS = 9;
 
 /** Row index per role inside the shared sheet. */
 const ROLE_ROW: Record<PlayerRole, number> = {
-  [PLAYER_ROLES.A]: 0, // top row → blue character
-  [PLAYER_ROLES.B]: 1, // middle row → yellow character
+  [PLAYER_ROLES.A]: 0, // top row -> teal runner
+  [PLAYER_ROLES.B]: 1, // middle row -> amber runner
 };
 
 /**
@@ -80,7 +80,7 @@ const EXTERNAL_BASE_SCALE = PLAYER_SIZE / EXTERNAL_FRAME_SIZE;
 
 /**
  * Per-state frame indices RELATIVE to the role's row (0-8). Mapping reflects
- * the typical Kenney "Pixel Platformer" character row layout:
+ * the project sheet layout:
  *   col 0: stand / idle
  *   col 1: walk A
  *   col 2: walk B

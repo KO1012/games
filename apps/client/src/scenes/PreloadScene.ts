@@ -32,7 +32,7 @@ export class PreloadScene extends Phaser.Scene {
   public preload(): void {
     if (this.input.keyboard) this.input.keyboard.enabled = false;
 
-    this.cameras.main.setBackgroundColor("#0b0e1a");
+    this.cameras.main.setBackgroundColor("#080d13");
     this.createLoadingUi();
     this.queueAssets();
     this.attachLoaderEvents();
@@ -78,15 +78,10 @@ export class PreloadScene extends Phaser.Scene {
       markAssetPresent(key);
     });
 
-    this.load.on(
-      Phaser.Loader.Events.FILE_LOAD_ERROR,
-      (file: Phaser.Loader.File) => {
-        markAssetMissing(file.key);
-        console.warn(
-          `[assets] missing ${file.key} (${file.src}) – using procedural fallback`,
-        );
-      },
-    );
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      markAssetMissing(file.key);
+      console.warn(`[assets] missing ${file.key} (${file.src}) – using procedural fallback`);
+    });
 
     this.load.on(Phaser.Loader.Events.PROGRESS, (progress: number) => {
       this.barFill.width = (this.barFrame.width - 4) * progress;
@@ -132,7 +127,7 @@ export class PreloadScene extends Phaser.Scene {
 
     this.statusText = this.add
       .text(w / 2, h / 2 + 56, "LOADING 0%", {
-        color: "#94a3b8",
+        color: "#8aa4a6",
         fontFamily: PIXEL_FONT,
         fontSize: "10px",
       })
