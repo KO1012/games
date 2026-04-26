@@ -1,0 +1,257 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://scripts/level/SpawnDirector.gd" id="1_director"]
+[ext_resource type="Script" path="res://scripts/level/SpawnTrigger.gd" id="2_trigger"]
+[ext_resource type="Script" path="res://scripts/level/Checkpoint.gd" id="3_checkpoint"]
+[ext_resource type="Texture2D" path="res://assets/bg/lab_backdrop.png" id="4_bg"]
+[ext_resource type="Texture2D" path="res://assets/sprites/world/platform_solid.png" id="5_platform"]
+[ext_resource type="Texture2D" path="res://assets/sprites/world/wall_tile.png" id="6_wall"]
+[ext_resource type="Texture2D" path="res://assets/sprites/world/exit_zone.png" id="7_exit"]
+[ext_resource type="Texture2D" path="res://assets/sprites/world/button_active.png" id="8_button"]
+
+[sub_resource type="RectangleShape2D" id="GroundShape"]
+size = Vector2(3600, 80)
+
+[sub_resource type="RectangleShape2D" id="WallShape"]
+size = Vector2(40, 720)
+
+[sub_resource type="RectangleShape2D" id="PlatformShapeA"]
+size = Vector2(360, 28)
+
+[sub_resource type="RectangleShape2D" id="PlatformShapeB"]
+size = Vector2(260, 28)
+
+[sub_resource type="RectangleShape2D" id="PlatformShapeC"]
+size = Vector2(420, 28)
+
+[sub_resource type="RectangleShape2D" id="PlatformShapeD"]
+size = Vector2(320, 28)
+
+[sub_resource type="RectangleShape2D" id="TriggerShape"]
+size = Vector2(80, 220)
+
+[sub_resource type="RectangleShape2D" id="CheckpointShape"]
+size = Vector2(86, 140)
+
+[sub_resource type="RectangleShape2D" id="BossTriggerShape"]
+size = Vector2(120, 260)
+
+[node name="Mission01" type="Node2D"]
+
+[node name="Backdrop" type="Polygon2D" parent="."]
+color = Color(0.03, 0.05, 0.07, 0.32)
+polygon = PackedVector2Array(0, 0, 3600, 0, 3600, 720, 0, 720)
+
+[node name="LabBackdropA" type="Sprite2D" parent="."]
+z_index = -20
+position = Vector2(640, 360)
+texture = ExtResource("4_bg")
+scale = Vector2(0.77, 0.77)
+
+[node name="LabBackdropB" type="Sprite2D" parent="."]
+z_index = -20
+position = Vector2(1920, 360)
+texture = ExtResource("4_bg")
+scale = Vector2(0.77, 0.77)
+
+[node name="LabBackdropC" type="Sprite2D" parent="."]
+z_index = -20
+position = Vector2(3200, 360)
+texture = ExtResource("4_bg")
+scale = Vector2(0.77, 0.77)
+
+[node name="Ground" type="StaticBody2D" parent="."]
+position = Vector2(1800, 680)
+
+[node name="GroundVisual" type="Sprite2D" parent="Ground"]
+texture = ExtResource("5_platform")
+scale = Vector2(112.5, 2.5)
+modulate = Color(0.82, 0.88, 0.9, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Ground"]
+shape = SubResource("GroundShape")
+
+[node name="LeftWall" type="StaticBody2D" parent="."]
+position = Vector2(-20, 360)
+
+[node name="WallVisual" type="Sprite2D" parent="LeftWall"]
+texture = ExtResource("6_wall")
+scale = Vector2(1.25, 22.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftWall"]
+shape = SubResource("WallShape")
+
+[node name="RightWall" type="StaticBody2D" parent="."]
+position = Vector2(3620, 360)
+
+[node name="WallVisual" type="Sprite2D" parent="RightWall"]
+texture = ExtResource("6_wall")
+scale = Vector2(1.25, 22.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RightWall"]
+shape = SubResource("WallShape")
+
+[node name="PlatformA" type="StaticBody2D" parent="."]
+position = Vector2(640, 548)
+
+[node name="Visual" type="Sprite2D" parent="PlatformA"]
+texture = ExtResource("5_platform")
+scale = Vector2(11.25, 0.875)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformA"]
+shape = SubResource("PlatformShapeA")
+
+[node name="PlatformB" type="StaticBody2D" parent="."]
+position = Vector2(1120, 478)
+
+[node name="Visual" type="Sprite2D" parent="PlatformB"]
+texture = ExtResource("5_platform")
+scale = Vector2(8.125, 0.875)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformB"]
+shape = SubResource("PlatformShapeB")
+
+[node name="PlatformC" type="StaticBody2D" parent="."]
+position = Vector2(1780, 566)
+
+[node name="Visual" type="Sprite2D" parent="PlatformC"]
+texture = ExtResource("5_platform")
+scale = Vector2(13.125, 0.875)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformC"]
+shape = SubResource("PlatformShapeC")
+
+[node name="PlatformD" type="StaticBody2D" parent="."]
+position = Vector2(2380, 508)
+
+[node name="Visual" type="Sprite2D" parent="PlatformD"]
+texture = ExtResource("5_platform")
+scale = Vector2(10, 0.875)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformD"]
+shape = SubResource("PlatformShapeD")
+
+[node name="P1Spawn" type="Marker2D" parent="."]
+position = Vector2(120, 600)
+
+[node name="P2Spawn" type="Marker2D" parent="."]
+position = Vector2(172, 600)
+
+[node name="Players" type="Node2D" parent="."]
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="Pickups" type="Node2D" parent="."]
+
+[node name="SpawnDirector" type="Node" parent="."]
+script = ExtResource("1_director")
+
+[node name="TriggerA" type="Area2D" parent="."]
+position = Vector2(650, 550)
+script = ExtResource("2_trigger")
+lock_camera = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TriggerA"]
+shape = SubResource("TriggerShape")
+
+[node name="Markers" type="Node2D" parent="TriggerA"]
+
+[node name="SoldierA1" type="Marker2D" parent="TriggerA/Markers"]
+position = Vector2(210, 58)
+
+[node name="SoldierA2" type="Marker2D" parent="TriggerA/Markers"]
+position = Vector2(330, 58)
+
+[node name="GunnerA1" type="Marker2D" parent="TriggerA/Markers"]
+position = Vector2(520, -112)
+
+[node name="CheckpointA" type="Area2D" parent="."]
+position = Vector2(1400, 590)
+script = ExtResource("3_checkpoint")
+checkpoint_id = "mid-01"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CheckpointA"]
+shape = SubResource("CheckpointShape")
+
+[node name="TriggerB" type="Area2D" parent="."]
+position = Vector2(1550, 550)
+script = ExtResource("2_trigger")
+lock_camera = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TriggerB"]
+shape = SubResource("TriggerShape")
+
+[node name="Markers" type="Node2D" parent="TriggerB"]
+
+[node name="SoldierB1" type="Marker2D" parent="TriggerB/Markers"]
+position = Vector2(210, 58)
+
+[node name="GunnerB1" type="Marker2D" parent="TriggerB/Markers"]
+position = Vector2(390, 58)
+
+[node name="TurretB1" type="Marker2D" parent="TriggerB/Markers"]
+position = Vector2(830, -82)
+
+[node name="CheckpointB" type="Area2D" parent="."]
+position = Vector2(2380, 590)
+script = ExtResource("3_checkpoint")
+checkpoint_id = "mid-02"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CheckpointB"]
+shape = SubResource("CheckpointShape")
+
+[node name="TriggerC" type="Area2D" parent="."]
+position = Vector2(2480, 550)
+script = ExtResource("2_trigger")
+lock_camera = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TriggerC"]
+shape = SubResource("TriggerShape")
+
+[node name="Markers" type="Node2D" parent="TriggerC"]
+
+[node name="SoldierC1" type="Marker2D" parent="TriggerC/Markers"]
+position = Vector2(160, 58)
+
+[node name="GunnerC1" type="Marker2D" parent="TriggerC/Markers"]
+position = Vector2(280, 58)
+
+[node name="TurretC1" type="Marker2D" parent="TriggerC/Markers"]
+position = Vector2(380, 58)
+
+[node name="BossTrigger" type="Area2D" parent="."]
+position = Vector2(2920, 540)
+script = ExtResource("2_trigger")
+lock_camera = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BossTrigger"]
+shape = SubResource("BossTriggerShape")
+
+[node name="Markers" type="Node2D" parent="BossTrigger"]
+
+[node name="Boss01" type="Marker2D" parent="BossTrigger/Markers"]
+position = Vector2(340, 68)
+
+[node name="TurretBoss1" type="Marker2D" parent="BossTrigger/Markers"]
+position = Vector2(140, 68)
+
+[node name="EndMarker" type="Marker2D" parent="."]
+position = Vector2(3480, 600)
+
+[node name="ExitZoneVisual" type="Sprite2D" parent="."]
+position = Vector2(3480, 594)
+texture = ExtResource("7_exit")
+scale = Vector2(1.35, 1.35)
+modulate = Color(0.65, 1, 0.9, 0.82)
+
+[node name="CheckpointAVisual" type="Sprite2D" parent="."]
+position = Vector2(1400, 620)
+texture = ExtResource("8_button")
+scale = Vector2(1, 1)
+
+[node name="CheckpointBVisual" type="Sprite2D" parent="."]
+position = Vector2(2380, 620)
+texture = ExtResource("8_button")
+scale = Vector2(1, 1)

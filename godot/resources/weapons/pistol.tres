@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/WeaponData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/Projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_script")
+weapon_id = "pistol"
+display_name = "Pistol"
+fire_interval = 0.24
+projectile_scene = ExtResource("2_projectile")
+projectile_speed = 900.0
+damage = 12
+spread_angle = 0.0
+pellet_count = 1
+ammo = 0
+infinite_ammo = true
+muzzle_offset = Vector2(26, -12)
+recoil = 0.0
+screen_shake = 1.5

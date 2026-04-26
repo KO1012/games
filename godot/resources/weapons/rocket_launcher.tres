@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/WeaponData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/Projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_script")
+weapon_id = "rocket_launcher"
+display_name = "Rocket Launcher"
+fire_interval = 0.9
+projectile_scene = ExtResource("2_projectile")
+projectile_speed = 520.0
+damage = 52
+spread_angle = 0.0
+pellet_count = 1
+ammo = 18
+infinite_ammo = false
+muzzle_offset = Vector2(30, -12)
+recoil = 0.7
+screen_shake = 6.0

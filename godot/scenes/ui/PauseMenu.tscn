@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/PauseMenu.gd" id="1_script"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+visible = false
+script = ExtResource("1_script")
+
+[node name="Panel" type="VBoxContainer" parent="."]
+visible = false
+anchors_preset = -1
+offset_left = 520.0
+offset_top = 250.0
+offset_right = 760.0
+offset_bottom = 420.0
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Panel"]
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+text = "Paused"
+
+[node name="ResumeButton" type="Button" parent="Panel"]
+layout_mode = 2
+text = "Resume"
+
+[node name="RestartButton" type="Button" parent="Panel"]
+layout_mode = 2
+text = "Restart Mission"

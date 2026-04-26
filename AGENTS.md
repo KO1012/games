@@ -2,14 +2,16 @@
 
 ## 项目定位
 
-这是一个双人远程联机网页游戏项目：
+这是一个 Godot 4.x + GDScript 的 2D 横版本地双人合作射击游戏 MVP。
 
-- 客户端：Phaser + TypeScript + Vite
-- 服务器：Colyseus + Node.js + TypeScript
-- 部署目标：自有 VPS
-- 核心玩法：2 人合作机关闯关
+- 引擎：Godot 4.6.x
+- 语言：GDScript
+- 当前入口：`godot/project.godot`
+- 主场景：`res://scenes/main/Main.tscn`
+- 核心玩法：本地双人 run-and-gun，P1 默认存在，P2 按加入键加入
+- 当前范围：单机 + 本地双人优先，暂不做在线联机
 
-当前项目已经进入实现阶段。允许在明确任务范围内修改游戏功能、服务端逻辑、客户端表现、测试和部署文档；没有明确任务时，不要新增玩法、关卡或做大范围重构。
+旧 Phaser / Colyseus / TypeScript 网页版项目已删除。后续不要再恢复 `apps/`、`packages/`、`levels/`、pnpm workspace 或旧网页联机架构，除非用户明确要求。
 
 ## 回复规则
 
@@ -18,31 +20,26 @@
 - 说明修改内容、验证结果和剩余风险即可。
 - 如果发现需求冲突，先指出冲突，再给出建议处理方式。
 
-## 推荐目录结构
-
-实现阶段优先按下面结构组织：
+## 当前目录结构
 
 ```text
 /
-  apps/
-    client/            # Phaser + Vite 客户端
-    server/            # Colyseus 服务端
-  packages/
-    shared/            # 客户端/服务端共享类型、协议常量、关卡类型
-  levels/              # 关卡 JSON
-  docs/                # 可选的补充设计文档
+  godot/
+    assets/       # 从旧项目迁移的现有 CC0 / 项目定制资源
+    docs/         # Godot 重做、联网计划、MVP 检查表
+    resources/    # WeaponData 等 Godot 资源
+    scenes/       # Godot 场景
+    scripts/      # GDScript 逻辑
+    project.godot
+    README.md
   AGENTS.md
-  GAME_DESIGN.md
-  NETWORK_SPEC.md
-  LEVEL_SCHEMA.md
-  LEVEL_NOTES.md
   DEV_LOG.md
-  ROADMAP.md
+  README.md
 ```
 
 ## AI 变更记录规则
 
-以后任何 AI 修改项目文件，都必须同步维护根目录 `DEV_LOG.md`。
+任何 AI 修改项目文件，都必须同步维护根目录 `DEV_LOG.md`。
 
 记录要求：
 
@@ -56,7 +53,7 @@
   - 运行过的验证命令和结果。
   - 未验证内容或剩余风险。
 - 如果只做了分析、没有修改文件，可以不写 `DEV_LOG.md`，但回复里要说明没有文件改动。
-- 如果修改了 `AGENTS.md`、`GAME_DESIGN.md`、`NETWORK_SPEC.md`、`LEVEL_SCHEMA.md`、`ROADMAP.md` 等约束文档，也必须记录。
+- 如果修改了 `AGENTS.md`、`README.md`、`godot/docs/*.md`、`godot/project.godot` 等约束或入口文件，也必须记录。
 
 推荐记录模板：
 
@@ -72,77 +69,58 @@
 
 ## 运行与开发命令
 
-根目录提供统一 pnpm scripts。Codex 添加或修改命令时，需要同步更新本节。
-
-常用命令：
+当前没有 Node/pnpm 项目脚本。使用 Godot 运行和检查：
 
 ```bash
-corepack pnpm install
-corepack pnpm run dev            # 同时启动客户端和服务端
-corepack pnpm run dev:client     # 启动 Vite 客户端
-corepack pnpm run dev:server     # 启动 Colyseus 服务端
-corepack pnpm run build          # 构建 client/server/shared
-corepack pnpm run typecheck      # 全量 TypeScript 类型检查
-corepack pnpm run lint           # 代码风格检查
-corepack pnpm run test           # 自动化测试
+godot --path godot
+godot --headless --path godot --import --quit
+godot --headless --path godot --check-only --script res://scripts/player/Player.gd
 ```
 
-推荐默认端口：
+如果本机 Godot 命令未加入 PATH，可使用已安装的 winget 路径：
 
-- 客户端开发服：`5173`
-- 服务端开发服：`2567`
-- Colyseus Monitor：仅开发环境开启，不暴露到公网
+```text
+%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.2-stable_win64_console.exe
+```
+
+Godot 4.6 的 `--check-only` 需要配合 `--script` 使用；全量脚本检查需要逐个 `.gd` 文件执行。
 
 ## 测试要求
 
-新增或修改功能时，至少覆盖对应层级：
+新增或修改功能时，按改动范围尽量覆盖：
 
-- `shared`：协议类型、关卡 schema 校验、纯函数单元测试。
-- `server`：房间加入/离开、输入处理、机关状态、胜负条件、断线重连测试。
-- `client`：输入采集、状态插值、场景切换、基础 UI 交互测试。
-- 联调：2 个浏览器实例进入同一房间，完成一关。
+- 脚本语法：逐个运行 `godot --headless --path godot --check-only --script <script>`。
+- 资源导入：运行 `godot --headless --path godot --import --quit`。
+- 场景 smoke：至少加载 `res://scenes/main/Game.tscn` 并确认 P1 能生成。
+- 可玩性：涉及操作、碰撞、刷怪、Boss、HUD 时，优先打开 Godot 可视化试玩。
 
-验收前必须运行：
-
-```bash
-corepack pnpm run typecheck
-corepack pnpm run lint
-corepack pnpm run test
-corepack pnpm run build
-```
-
-如果某条命令暂时不存在，先说明原因；实现阶段应尽快补齐。
+如果无法运行 Godot CLI，必须在回复和 `DEV_LOG.md` 里说明原因。
 
 ## 提交规则
 
 - 每次提交只包含一个可独立验收的任务。
 - 不要把格式化、重命名、重构和功能开发混在一个提交里。
-- 提交信息使用简洁英文或中文均可，格式建议：
-
-```text
-docs: add network protocol spec
-feat(server): add two-player room lifecycle
-fix(client): handle reconnect state sync
-```
-
-- 提交前检查 `git diff`，不要提交无关文件、构建产物、日志、`.env`。
+- 提交前检查 `git diff`，不要提交无关文件、导出产物、日志、`.env`、本地缓存。
+- `godot/assets/**/*.import` 和 `godot/scripts/**/*.gd.uid` 是 Godot 元数据，应随对应资源/脚本提交。
+- `godot/.godot/` 是本地导入缓存，不提交。
 
 ## 禁止事项
 
-- 未经明确任务不要新增玩法、关卡、协议字段或大范围重构。
-- 不要把客户端作为权威逻辑来源；移动、碰撞、机关、通关判定都应由服务端决定。
-- 不要引入 P2P、WebRTC 或第三方托管多人服务替代 Colyseus，除非文档先更新并获得确认。
-- 不要硬编码 VPS IP、域名、密钥、数据库密码或 Colyseus secret。
-- 不要提交 `dist/`、`node_modules/`、日志、临时截图、私有证书。
-- 不要绕过 `LEVEL_SCHEMA.md` 直接写非规范关卡字段。
-- 不要做大范围无关重构。
+- 未经明确任务不要新增大玩法、关卡批量内容或大范围重构。
+- 不要恢复旧 Phaser / Colyseus / TypeScript 网页项目。
+- 不要重新引入 Node/pnpm workspace 作为主项目结构。
+- 不要使用受版权保护的角色、素材、音效、关卡或命名。
+- 不要引入大型第三方 Godot 插件，除非先获得确认。
+- 不要提交 Godot 导出产物、`.godot/` 缓存、日志、临时截图、私有证书、密钥或 `.env`。
+- 不要删除或覆盖用户未要求处理的文件。
 - 不要使用破坏性 git 命令回滚用户改动。
 
 ## 实现原则
 
-- 服务器权威，客户端只发送输入和展示预测/插值结果。
-- 协议字段先写入 `NETWORK_SPEC.md`，再实现。
-- 关卡字段先写入 `LEVEL_SCHEMA.md`，再使用。
-- 新机制先做最小可玩闭环，再扩展表现。
-- 任何影响客户端和服务端的数据结构应放入 `shared/`。
-- 复杂玩法优先写自动化测试，再接入关卡。
+- 以“能打开、能玩、能继续开发”为优先级。
+- 先保持单机 + 本地双人闭环稳定，再考虑在线联机。
+- 玩家移动使用 `CharacterBody2D` 和 `_physics_process`，不要直接硬改位置实现常规移动。
+- 玩法逻辑优先拆成可复用组件，例如 `Health`、`Hurtbox`、`WeaponController`、`SpawnDirector`。
+- 关键参数优先用 `@export` 暴露，避免散落魔法数字。
+- 现有 `godot/assets/` 资源优先复用；缺少射击专用素材时，先用同风格占位或程序化形状。
+- 后续在线方案参考 `godot/docs/NETWORK_PLAN.md`，仍以服务端权威为原则。

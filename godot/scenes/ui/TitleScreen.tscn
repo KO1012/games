@@ -1,0 +1,68 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/TitleScreen.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/bg/lab_backdrop.png" id="2_bg"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/menu_lab_drift.wav" id="3_music"]
+
+[node name="TitleScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Tint" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.04, 0.06, 0.42)
+
+[node name="Panel" type="VBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 390.0
+offset_top = 190.0
+offset_right = 890.0
+offset_bottom = 530.0
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="Panel"]
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 40
+text = "COOP CIRCUIT RAID"
+
+[node name="Subtitle" type="Label" parent="Panel"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Local 2-player lab assault MVP"
+
+[node name="StartButton" type="Button" parent="Panel"]
+layout_mode = 2
+text = "Start Mission"
+
+[node name="Controls" type="Label" parent="Panel"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 3
+text = "P1 WASD aim/move, K jump, J shoot, L grenade, U switch. P2 Enter joins, arrows aim/move, Shift jump, Enter shoot, . grenade, / switch."
+
+[node name="MenuMusic" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_music")
+volume_db = -12.0
+autoplay = true

@@ -1,0 +1,43 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/Boss01.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/combat/Health.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/combat/Hurtbox.gd" id="3_hurtbox"]
+[ext_resource type="Texture2D" path="res://assets/sprites/players.png" id="4_players"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(92, 94)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hurtbox"]
+size = Vector2(98, 100)
+
+[node name="Boss01" type="CharacterBody2D"]
+script = ExtResource("1_enemy")
+move_speed = 76.0
+drop_chance = 0.0
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(0, -34)
+texture = ExtResource("4_players")
+hframes = 9
+vframes = 3
+frame_coords = Vector2i(2, 2)
+scale = Vector2(4.7, 4.7)
+modulate = Color(0.72, 0.78, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -28)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 240
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("3_hurtbox")
+health_path = NodePath("../Health")
+team = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(0, -28)
+shape = SubResource("RectangleShape2D_hurtbox")

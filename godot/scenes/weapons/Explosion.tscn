@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/Explosion.gd" id="1_script"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_explosion"]
+radius = 58.0
+
+[node name="Explosion" type="Area2D"]
+script = ExtResource("1_script")
+
+[node name="Blast" type="Polygon2D" parent="."]
+color = Color(1, 0.42, 0.12, 0.72)
+polygon = PackedVector2Array(58, 0, 35, 35, 0, 58, -35, 35, -58, 0, -35, -35, 0, -58, 35, -35)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_explosion")

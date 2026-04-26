@@ -1,0 +1,67 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/HUD.gd" id="1_script"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_script")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 16.0
+offset_right = 760.0
+offset_bottom = 48.0
+theme_override_constants/separation = 24
+
+[node name="P1Label" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+text = "P1 HP"
+
+[node name="P2Label" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+text = "P2 Press Join"
+
+[node name="WeaponLabel" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+text = "Weapon"
+
+[node name="AmmoLabel" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+text = "Ammo"
+
+[node name="BossPanel" type="VBoxContainer" parent="Root"]
+layout_mode = 0
+offset_left = 360.0
+offset_top = 62.0
+offset_right = 920.0
+offset_bottom = 112.0
+
+[node name="BossLabel" type="Label" parent="Root/BossPanel"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Boss"
+
+[node name="BossBar" type="ProgressBar" parent="Root/BossPanel"]
+layout_mode = 2
+max_value = 240.0
+value = 240.0
+show_percentage = false
+
+[node name="MessageLabel" type="Label" parent="Root"]
+layout_mode = 0
+offset_left = 440.0
+offset_top = 300.0
+offset_right = 840.0
+offset_bottom = 360.0
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 34
+text = ""
